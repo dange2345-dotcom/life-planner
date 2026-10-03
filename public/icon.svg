@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#cfe4f5"/>
+  <g transform="translate(116 116)">
+    <rect x="0"   y="0"   width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="100" y="0"   width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="200" y="0"   width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="0"   y="100" width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="100" y="100" width="80" height="80" rx="20" fill="#ffffff"/>
+    <rect x="200" y="100" width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="0"   y="200" width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="100" y="200" width="80" height="80" rx="20" fill="#e58f96"/>
+    <rect x="200" y="200" width="80" height="80" rx="20" fill="#ffffff"/>
+    <g fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 41l13 13 25-27"/>
+      <path d="M122 41l13 13 25-27"/>
+      <path d="M222 41l13 13 25-27"/>
+      <path d="M22 141l13 13 25-27"/>
+      <path d="M222 141l13 13 25-27"/>
+      <path d="M22 241l13 13 25-27"/>
+      <path d="M122 241l13 13 25-27"/>
+    </g>
+  </g>
+</svg>

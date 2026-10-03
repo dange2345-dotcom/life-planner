@@ -1,0 +1,281 @@
+/* ===== Токены: светлая пастельная тема по умолчанию, тёмная — по настройке системы ===== */
+:root {
+  color-scheme: light dark;
+
+  --bg: #faf7f5;
+  --surface: #ffffff;
+  --text: #1d2026;
+  --muted: #6b7280;
+  --line: #ece6e2;
+
+  --pink: #f6d6d6;
+  --pink-strong: #e58f96;
+  --blue: #cfe4f5;
+  --blue-strong: #4f8fc9;
+
+  --ok: #3f9a6b;
+  --warn: #b7791f;
+  --error: #c2414b;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --surface: #1e2125;
+    --text: #eceef1;
+    --muted: #9aa1ab;
+    --line: #2b2f35;
+
+    --pink: #42292d;
+    --pink-strong: #f0a3aa;
+    --blue: #203242;
+    --blue-strong: #7fb6e6;
+
+    --ok: #5cc28d;
+    --warn: #e0a64a;
+    --error: #f07a83;
+
+    --shadow: none;
+  }
+}
+
+/* ===== Базовый слой «как родное приложение» (скилл mobile-native) ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin-bottom: 8px;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  font-size: 16px; /* меньше 16px — iOS увеличивает страницу при фокусе */
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ===== Раскладка ===== */
+.screen {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px))
+    calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.screen--center {
+  min-height: 100dvh;
+  justify-content: center;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+/* ===== Текст ===== */
+.muted {
+  color: var(--muted);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  color: var(--error);
+}
+
+/* ===== Поля ===== */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.field input {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.field input:focus-visible {
+  border-color: var(--blue-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue-strong) 25%, transparent);
+}
+
+/* ===== Кнопки ===== */
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 13px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 120ms var(--ease-out),
+    background-color 120ms var(--ease-out),
+    opacity 120ms;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn--primary {
+  background: var(--blue-strong);
+  color: #fff;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--blue-strong) 88%, black);
+  }
+
+  .btn--ghost:hover {
+    color: var(--text);
+  }
+}
+
+/* ===== Статус и списки ===== */
+.status {
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.status--ok {
+  color: var(--ok);
+}
+
+.status--warn {
+  color: var(--warn);
+}
+
+.status--error {
+  color: var(--error);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.list__row:first-child {
+  border-top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+}
