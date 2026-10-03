@@ -5,4 +5,10 @@ import './styles.css'
 // Просим браузер не вычищать локальную базу при нехватке места.
 navigator.storage?.persist?.().catch(() => {})
 
-render(<App />, document.getElementById('app')!)
+const root = document.getElementById('app')!
+
+if (import.meta.env.VITE_DEMO === '1') {
+  import('./demo').then(({ DemoApp }) => render(<DemoApp />, root))
+} else {
+  render(<App />, root)
+}
