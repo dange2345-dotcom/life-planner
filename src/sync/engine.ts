@@ -33,6 +33,7 @@ const PULL_OVERLAP_MICROS = 60_000_000
 const DEBOUNCE_MS = 2_000
 const INTERVAL_MS = 60_000
 const CURSOR_KEY = 'pullCursor'
+const KINDS_KEY = 'pullKinds'
 
 const tableByKind = new Map<string, (typeof SYNCED_TABLES)[number]['table']>(
   SYNCED_TABLES.map(({ table, kind }) => [kind, table]),
@@ -89,7 +90,11 @@ export function createSyncEngine(db: PlannerDB, remote: Remote): SyncEngine {
   }
 
   async function pull() {
-    const cursor = ((await db.meta.get(CURSOR_KEY))?.value as string | undefined) ?? null
+    // Если в этой версии приложения появились новые виды записей (новый раздел), скачиваем облако заново целиком:
+    // записи этих видов могли прийти раньше, когда старая версия их пропускала, а курсор уже ушёл вперёд.
+    const kinds = SYNCED_TABLES.map(({ kind }) => kind).join(',')
+    const sameKinds = (await db.meta.get(KINDS_KEY))?.value === kinds
+    const cursor = sameKinds ? (((await db.meta.get(CURSOR_KEY))?.value as string | undefined) ?? null) : null
     let since = cursor ? overlapSince(cursor) : null
     let newest = cursor
 
@@ -104,6 +109,7 @@ export function createSyncEngine(db: PlannerDB, remote: Remote): SyncEngine {
     }
 
     if (newest && newest !== cursor) await db.meta.put({ key: CURSOR_KEY, value: newest })
+    if (!sameKinds) await db.meta.put({ key: KINDS_KEY, value: kinds })
   }
 
   async function runOnce() {

@@ -162,6 +162,30 @@ describe('синхронизация двух устройств', () => {
     expect(await laptop.habits.count()).toBe(0)
   })
 
+  it('новый раздел в обновлённом приложении: облако скачивается заново, старые записи нового вида не теряются', async () => {
+    const id = await newHabit(phone)
+    await toggleHabitLog(phone, id, '2026-10-04')
+    await createSyncEngine(phone, remote).sync()
+
+    // «Старая версия» на компьютере знала только привычки и уже прокрутила курсор на час вперёд всех записей
+    // (минутное перекрытие их не захватит — проверяем именно сброс курсора).
+    const staleState = [
+      { key: 'pullCursor', value: '2026-10-04T01:00:00.000000+00:00' },
+      { key: 'pullKinds', value: 'habit' },
+    ]
+    await laptop.meta.bulkPut(staleState)
+    await createSyncEngine(laptop, remote).sync()
+    expect(await laptop.habitLogs.count()).toBe(1)
+    expect((await laptop.meta.get('pullKinds'))?.value).toBe('habit,habitLog')
+
+    // Контрольная проверка: с тем же курсором, но «знакомыми» видами записей ничего не скачалось бы.
+    const control = createDb(`control-${n}`)
+    await control.meta.bulkPut([staleState[0], { key: 'pullKinds', value: 'habit,habitLog' }])
+    await createSyncEngine(control, remote).sync()
+    expect(await control.habitLogs.count()).toBe(0)
+    await control.delete()
+  })
+
   it('повторная синхронизация без изменений ничего не портит', async () => {
     const id = await newHabit(phone)
     const engine = createSyncEngine(phone, remote)

@@ -146,18 +146,17 @@ function activeIn(habit: Habit, from: DateKey, to: DateKey): boolean {
   return habit.startDate <= to && (habit.archivedAt === null || habit.archivedAt >= from)
 }
 
-function scheduleHint(habit: Habit): string {
+function scheduleHint(habit: Habit, today: DateKey): string {
   const s = habit.schedule
-  switch (s.type) {
-    case 'daily':
-      return 'каждый день'
-    case 'weekdays':
-      return s.days.map((d) => WEEKDAY_SHORT[d - 1].toLowerCase()).join(', ')
-    case 'weekly':
-      return `${s.times} р. в неделю`
-    case 'monthly':
-      return `${s.times} р. в месяц`
-  }
+  const base =
+    s.type === 'daily'
+      ? 'каждый день'
+      : s.type === 'weekdays'
+        ? s.days.map((d) => WEEKDAY_SHORT[d - 1].toLowerCase()).join(', ')
+        : `${s.times} р. в ${s.type === 'weekly' ? 'неделю' : 'месяц'}`
+  const from = habit.startDate > today ? ` · с ${formatDayMonth(habit.startDate)}` : ''
+  const until = habit.archivedAt && habit.archivedAt >= today ? ` · до ${formatDayMonth(habit.archivedAt)}` : ''
+  return base + from + until
 }
 
 /* ===================== Неделя ===================== */
@@ -202,7 +201,7 @@ function WeekView(props: { habits: Habit[]; index: LogIndex; week: DateKey; toda
               </span>
               <span class="habit-name__text">
                 <span class="habit-name__title">{habit.title}</span>
-                <span class="habit-name__hint">{scheduleHint(habit)}</span>
+                <span class="habit-name__hint">{scheduleHint(habit, today)}</span>
               </span>
               <span class="habit-name__stat tabular">{stat}</span>
             </button>

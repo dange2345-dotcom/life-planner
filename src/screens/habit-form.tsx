@@ -36,7 +36,10 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
   const [weekly, setWeekly] = useState(initial?.type === 'weekly' ? initial.times : 3)
   const [monthly, setMonthly] = useState(initial?.type === 'monthly' ? initial.times : 2)
   const [startDate, setStartDate] = useState(editing?.startDate ?? props.today)
+  // Последний день курса (например, лекарства на 28 дней). Пусто — без срока.
+  const [until, setUntil] = useState(editing?.archivedAt ?? '')
   const [error, setError] = useState<string | null>(null)
+  const isArchived = editing?.archivedAt != null && editing.archivedAt < props.today
 
   function schedule(): HabitSchedule {
     switch (type) {
@@ -56,8 +59,9 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
     if (!title.trim()) return setError('Как назовём привычку?')
     if (type === 'weekdays' && days.length === 0) return setError('Выберите хотя бы один день')
     if (!startDate) return setError('Укажите дату начала')
+    if (until && until < startDate) return setError('Дата окончания раньше даты начала')
 
-    const fields = { title: title.trim(), emoji, schedule: schedule(), startDate }
+    const fields = { title: title.trim(), emoji, schedule: schedule(), startDate, archivedAt: until || null }
     if (editing) await updateHabit(db, editing.id, fields)
     else await createHabit(db, fields)
     props.onClose()
@@ -65,7 +69,7 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
 
   async function onArchive() {
     if (!editing) return
-    if (editing.archivedAt) {
+    if (isArchived) {
       await restoreHabit(db, editing.id)
     } else {
       // Сегодняшний день остаётся в плане, только если по нему уже есть отметка; иначе привычка заканчивается вчера.
@@ -142,6 +146,11 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
           <input type="date" value={startDate} onInput={(e) => setStartDate(e.currentTarget.value)} />
         </label>
 
+        <label class="field">
+          <span>Закончить после (необязательно — например, курс лекарств)</span>
+          <input type="date" value={until} min={startDate} onInput={(e) => setUntil(e.currentTarget.value)} />
+        </label>
+
         {error && (
           <p class="error" role="alert">
             {error}
@@ -161,7 +170,7 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
               ↓ Ниже
             </button>
             <button type="button" class="btn btn--ghost" onClick={onArchive}>
-              {editing.archivedAt ? 'Вернуть из архива' : 'В архив'}
+              {isArchived ? 'Вернуть из архива' : 'В архив'}
             </button>
             <button type="button" class="btn btn--ghost btn--danger" onClick={onDelete}>
               Удалить

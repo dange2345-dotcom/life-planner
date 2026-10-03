@@ -2,8 +2,8 @@
 // Записи пишутся в том же формате, что и приложение, — устройства подхватывают их при следующей синхронизации.
 //
 //   npm run planner -- habits [--all]
-//   npm run planner -- add-habit --title "Зарядка" [--emoji 🏃] [--schedule daily|weekdays:1,3,5|weekly:3|monthly:2] [--start YYYY-MM-DD]
-//   npm run planner -- edit-habit <ref> [--title …] [--emoji …] [--schedule …] [--start …]
+//   npm run planner -- add-habit --title "Зарядка" [--emoji 🏃] [--schedule daily|weekdays:1,3,5|weekly:3|monthly:2] [--start YYYY-MM-DD] [--until YYYY-MM-DD]
+//   npm run planner -- edit-habit <ref> [--title …] [--emoji …] [--schedule …] [--start …] [--until YYYY-MM-DD|none]
 //   npm run planner -- archive-habit <ref> [--date YYYY-MM-DD] | restore-habit <ref> | delete-habit <ref>
 //   npm run planner -- mark <ref> [--date YYYY-MM-DD] [--undo]
 //   npm run planner -- stats [--month YYYY-MM]
@@ -146,7 +146,11 @@ function describeSchedule(s: HabitSchedule): string {
 }
 
 function describe(h: Habit): string {
-  const archived = h.archivedAt ? ` · в архиве с ${formatDayMonth(addDaysKey(h.archivedAt, 1))}` : ''
+  const archived = !h.archivedAt
+    ? ''
+    : h.archivedAt >= todayKey()
+      ? ` · до ${formatDayMonth(h.archivedAt)}`
+      : ` · в архиве с ${formatDayMonth(addDaysKey(h.archivedAt, 1))}`
   return `${h.id.slice(0, 8)}  ${h.emoji} ${h.title} — ${describeSchedule(h.schedule)} · с ${formatDayMonth(h.startDate)}${archived}`
 }
 
@@ -165,6 +169,7 @@ const { positionals, values } = parseArgs({
     emoji: { type: 'string' },
     schedule: { type: 'string' },
     start: { type: 'string' },
+    until: { type: 'string' },
     date: { type: 'string' },
     month: { type: 'string' },
     undo: { type: 'boolean' },
@@ -190,7 +195,8 @@ switch (command) {
       emoji: values.emoji ?? '✅',
       schedule: parseSchedule(values.schedule ?? 'daily'),
       startDate: checkDate(values.start, today),
-      archivedAt: null,
+      // Курс на срок: последний день, когда привычка планируется (дальше — сама уходит в архив).
+      archivedAt: values.until ? checkDate(values.until, today) : null,
       order: habits.reduce((max, h) => Math.max(max, h.order), 0) + 1,
       goalId: null,
       updatedAt: 0,
@@ -210,6 +216,7 @@ switch (command) {
       ...(values.emoji ? { emoji: values.emoji } : {}),
       ...(values.schedule ? { schedule: parseSchedule(values.schedule) } : {}),
       ...(values.start ? { startDate: checkDate(values.start, today) } : {}),
+      ...(values.until ? { archivedAt: values.until === 'none' ? null : checkDate(values.until, today) } : {}),
     }
     await save('habit', next)
     console.log(`✔ Изменено: ${describe(next)}`)

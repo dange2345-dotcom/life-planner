@@ -11,6 +11,8 @@ export interface HabitInput {
   emoji: string
   schedule: HabitSchedule
   startDate: DateKey
+  /** Последний день (курс на срок); null — без срока. */
+  archivedAt?: DateKey | null
 }
 
 export async function createHabit(db: PlannerDB, input: HabitInput): Promise<string> {
@@ -22,7 +24,7 @@ export async function createHabit(db: PlannerDB, input: HabitInput): Promise<str
       ...input,
       id,
       order,
-      archivedAt: null,
+      archivedAt: input.archivedAt ?? null,
       goalId: null,
       updatedAt: nextStamp(),
       deleted: 0,
