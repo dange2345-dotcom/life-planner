@@ -28,6 +28,9 @@ create policy "records: own rows only" on public.records
 
 revoke all on public.records from anon;
 grant select, insert, update, delete on public.records to authenticated;
+-- Для scripts/planner.ts (секретный ключ, только на компьютере владельца). RLS он обходит, поэтому
+-- скрипт сам фильтрует и подписывает записи user_id владельца.
+grant select, insert, update, delete on public.records to service_role;
 
 -- Триггер: сервер сам ставит server_updated_at и не даёт более старой правке затереть более новую.
 create or replace function public.records_before_write()

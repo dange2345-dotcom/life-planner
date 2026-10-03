@@ -25,6 +25,25 @@ npm run build      # dist/ + service worker + иконки
 npm run preview
 ```
 
+## Данные владельца по его просьбе (scripts/planner.ts)
+
+Владелец просит в чате «добавь привычку…», «отметь…», «как у меня с привычками?» — делать через CLI, а не руками в SQL:
+
+```
+npm run planner -- habits [--all]
+npm run planner -- add-habit --title "…" --emoji 🏃 --schedule daily|weekdays:1,3,5|weekly:3|monthly:2 [--start YYYY-MM-DD]
+npm run planner -- edit-habit <ref> [--title|--emoji|--schedule|--start]
+npm run planner -- archive-habit <ref> | restore-habit <ref> | delete-habit <ref>
+npm run planner -- mark <ref> [--date YYYY-MM-DD] [--undo]
+npm run planner -- stats [--month YYYY-MM]
+```
+
+- `<ref>` — начало id или часть названия. Дни недели ISO: 1 = пн … 7 = вс. Эмодзи подбирать по смыслу (без флагов — Windows их не рисует).
+- Ключ `SUPABASE_SECRET_KEY` (sb_secret_…) лежит в `.env` (в .gitignore). Никогда не выводить его, не коммитить, не просить прислать в чат.
+- Скрипт пишет `updated_at` строго больше прошлой версии и `user_id` владельца (секретный ключ обходит RLS). Устройства подтянут изменения при следующей синхронизации (открытие приложения / ≤1 мин).
+- Перед удалением — переспросить; «перестать отслеживать» = архив, а не удаление (история сохраняется).
+- Цели/задачи/финансы — по мере появления разделов добавлять команды сюда же.
+
 ## Заметки
 
 - **Пользователь в России.** Cloudflare (и хостинги за ним) с июня 2025 душат провайдеры — не использовать. Firebase блокируется у части провайдеров — не использовать. Supabase и GitHub Pages работают.
