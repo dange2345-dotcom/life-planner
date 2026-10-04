@@ -104,3 +104,30 @@ export const IconFlame = (p: IconProps) => (
     <path d="M12 21c-3.9 0-7-2.7-7-6.6 0-3.2 2.2-5.2 3.6-7 .3 1.6 1.2 2.7 2.4 3.1-.4-3.1 1-5.7 3-7.5.2 2.8 1.6 4.4 3 6 1.2 1.4 2 2.9 2 5.2 0 4-3.1 6.8-7 6.8z" />
   </Svg>
 )
+
+export const IconFlag = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 21V4.5M5 4.5h11.5l-2 4 2 4H5" />
+  </Svg>
+)
+
+export const IconClock = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Svg>
+)
+
+export const IconBell = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </Svg>
+)
+
+export const IconCalendar = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
+    <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+  </Svg>
+)

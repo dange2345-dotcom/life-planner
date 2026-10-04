@@ -34,12 +34,175 @@ export interface Habit extends SyncMeta {
   order: number
   /** Цель на год, к которой привязана привычка (этап 5). */
   goalId: string | null
+  /** Время напоминаний «HH:MM», если в этот день привычка ещё не отмечена. У старых записей поля нет. */
+  remindAt?: string[]
 }
 
 /** Отметка «сделано» за день. id = `${habitId}:${date}` — одинаковый на всех устройствах, поэтому без дублей. */
 export interface HabitLog extends SyncMeta {
   habitId: string
   date: DateKey
+}
+
+/* ===================== Задачи ===================== */
+
+/** 0 — без приоритета, 1 — низкий, 2 — средний, 3 — высокий. */
+export type Priority = 0 | 1 | 2 | 3
+
+export interface Project extends SyncMeta {
+  title: string
+  emoji: string
+  note: string
+  deadline: DateKey | null
+  goalId: string | null
+  /** День, когда проект завершён; null — в работе. */
+  doneAt: DateKey | null
+  order: number
+}
+
+export interface Task extends SyncMeta {
+  title: string
+  note: string
+  projectId: string | null
+  /** День, на который запланирована задача (он же срок). null — без даты. */
+  date: DateKey | null
+  /** «HH:MM» — в это время придёт напоминание; null — без времени. */
+  time: string | null
+  priority: Priority
+  /** День выполнения; null — не выполнена. */
+  doneAt: DateKey | null
+  order: number
+}
+
+/* ===================== Финансы ===================== */
+
+export type MoneyType = 'expense' | 'income'
+
+/** Операция. Суммы — в рублях, всегда положительные; знак задаёт type. */
+export interface Transaction extends SyncMeta {
+  type: MoneyType
+  amount: number
+  /** Ключ встроенной категории (см. domain/money.ts) или id своей категории. */
+  category: string
+  date: DateKey
+  note: string
+  /** Оплата регулярного платежа: id = `pay:${paymentId}:${dueDate}`, чтобы два устройства не создали дубль. */
+  paymentId: string | null
+  dueDate: DateKey | null
+}
+
+/** Своя категория (встроенные живут в коде). */
+export interface Category extends SyncMeta {
+  type: MoneyType
+  title: string
+  emoji: string
+  order: number
+}
+
+export type PaymentSchedule =
+  /** Каждый месяц в этот день; если в месяце дней меньше — в последний день. */
+  | { type: 'monthly'; day: number }
+  | { type: 'yearly'; month: number; day: number }
+  /** День недели ISO: 1 = пн … 7 = вс. */
+  | { type: 'weekly'; weekday: number }
+
+export type PaymentKind = 'subscription' | 'credit' | 'bill' | 'other'
+
+/** Регулярный платёж: подписка, кредит, коммуналка. */
+export interface Payment extends SyncMeta {
+  title: string
+  emoji: string
+  kind: PaymentKind
+  amount: number
+  category: string
+  schedule: PaymentSchedule
+  /** Первый платёж — не раньше этой даты. */
+  startDate: DateKey
+  /** Последний платёж (кредит, подписка до даты); null — бессрочно. */
+  endDate: DateKey | null
+  note: string
+  order: number
+}
+
+/** Цель накоплений. Сколько накоплено — сумма её пополнений (SavingEntry). */
+export interface Saving extends SyncMeta {
+  title: string
+  emoji: string
+  target: number
+  deadline: DateKey | null
+  goalId: string | null
+  order: number
+}
+
+/** Пополнение (amount > 0) или снятие (amount < 0) накоплений. */
+export interface SavingEntry extends SyncMeta {
+  savingId: string
+  amount: number
+  date: DateKey
+  note: string
+}
+
+/* ===================== Цели на год ===================== */
+
+/**
+ * Как считать процент цели:
+ * auto — среднее по привязанным привычкам, проектам, накоплениям и шагам;
+ * count — счётчик «N из M» (например, уроки курса), можно считать отметки привычки;
+ * manual — процент вручную.
+ */
+export type GoalMeasure = 'auto' | 'count' | 'manual'
+
+export interface GoalStep {
+  id: string
+  title: string
+  done: boolean
+}
+
+export interface Goal extends SyncMeta {
+  title: string
+  emoji: string
+  /** Ключ сферы жизни (см. domain/goals.ts). */
+  sphere: string
+  year: number
+  deadline: DateKey | null
+  note: string
+  measure: GoalMeasure
+  countTarget: number
+  /** Сколько уже было сделано до начала учёта (или вручную, без привычки). */
+  countBase: number
+  /** Считать отметки этой привычки. */
+  countHabitId: string | null
+  manualValue: number
+  steps: GoalStep[]
+  doneAt: DateKey | null
+  order: number
+}
+
+/* ===================== Настройки и уведомления ===================== */
+
+/** Синхронизируемая настройка: одна запись на ключ (id), значение — любое. */
+export interface Setting extends SyncMeta {
+  value: unknown
+}
+
+export interface NotifySettings {
+  /** Утром: план на день (привычки, задачи, платежи сегодня и завтра). */
+  morning: { enabled: boolean; time: string }
+  /** Вечером: что ещё не отмечено. */
+  evening: { enabled: boolean; time: string }
+  /** Напоминания по времени у привычек и задач. */
+  habits: boolean
+  tasks: boolean
+  /** Часовой пояс IANA (с устройства) — сервер считает время напоминаний в нём. */
+  timezone: string
+}
+
+/** Подписка устройства на пуш-уведомления. id — хэш адреса подписки. */
+export interface PushSub extends SyncMeta {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  device: string
+  createdAt: number
 }
 
 export interface MetaRow {

@@ -36,13 +36,46 @@ npm run planner -- edit-habit <ref> [--title|--emoji|--schedule|--start]
 npm run planner -- archive-habit <ref> | restore-habit <ref> | delete-habit <ref>
 npm run planner -- mark <ref> [--date YYYY-MM-DD] [--undo]
 npm run planner -- stats [--month YYYY-MM]
+npm run planner -- remind <habit> --at 08:00,18:30|none          # пуш, если привычка ещё не отмечена
+
+npm run planner -- tasks [--all] | projects
+npm run planner -- add-task --title "…" [--date YYYY-MM-DD|none] [--time HH:MM] [--priority 0-3] [--project <ref>]
+npm run planner -- edit-task <ref> [...] | done-task <ref> [--undo] | delete-task <ref>
+npm run planner -- add-project --title "…" [--emoji] [--deadline] [--goal <ref>]
+
+npm run planner -- money [--month] | categories
+npm run planner -- add-expense|add-income --amount 1250 --category food [--date] [--note]
+npm run planner -- savings | add-saving --title --target 100000 [--have] [--deadline] [--goal] | deposit|withdraw <ref> --amount
+npm run planner -- payments | add-payment --title --amount --next YYYY-MM-DD [--repeat monthly|yearly|weekly] [--kind credit] [--until] | pay <ref> [--due] [--undo]
+
+npm run planner -- goals [--year] | add-goal --title --sphere growth [--measure auto|count|manual] [--target --base --habit <ref>] [--value]
+npm run planner -- edit-goal <ref> [...] [--done|--undo] | link <goal> --habit|--project|--saving <ref> [--undo]
+npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off]
 ```
 
 - `<ref>` — начало id или часть названия. Дни недели ISO: 1 = пн … 7 = вс. Эмодзи подбирать по смыслу (без флагов — Windows их не рисует).
+- Сферы целей: health, growth, career, money, relations, home, hobby, travel. Категории расходов — `npm run planner -- categories`.
 - Ключ `SUPABASE_SECRET_KEY` (sb_secret_…) лежит в `.env` (в .gitignore). Никогда не выводить его, не коммитить, не просить прислать в чат.
 - Скрипт пишет `updated_at` строго больше прошлой версии и `user_id` владельца (секретный ключ обходит RLS). Устройства подтянут изменения при следующей синхронизации (открытие приложения / ≤1 мин).
 - Перед удалением — переспросить; «перестать отслеживать» = архив, а не удаление (история сохраняется).
-- Цели/задачи/финансы — по мере появления разделов добавлять команды сюда же.
+
+## Облако Supabase и уведомления (scripts/supabase-admin.ts)
+
+Владелец выдал токен Management API (`SUPABASE_ACCESS_TOKEN=sbp_…` в `.env`) — Claude сам настраивает облако:
+
+```
+npm run supabase -- deploy        # выложить функцию supabase/functions/notify
+npm run supabase -- secrets       # секреты функции (из .env и private/notify-keys.env)
+npm run supabase -- cron          # расписание раз в минуту (supabase/notify.sql) + секрет в Vault
+npm run supabase -- run           # вызвать функцию как расписание (проверка)
+npm run supabase -- logs [мин]    # журнал функции
+npm run supabase -- sql "…"       # выполнить SQL
+```
+
+- Пуши — **Web Push от самого приложения** (не ntfy): устройство подписывается в «Настройки → Уведомления» (iPhone — только из приложения на экране «Домой», iOS 16.4+), подписка хранится записью `kind = 'pushSub'`. Функция `notify` (Deno, без библиотек: `webpush.ts` — RFC 8291 + VAPID, проверено эталоном RFC; `reminders.ts` — что и когда слать, сверено тестами с `src/domain`) раз в минуту читает `records` секретным ключом и шлёт напоминания: утренний план, вечерний итог, время у привычки (`remindAt`) и у задачи (`time`), платежи сегодня/завтра — в утреннем плане.
+- Ключи VAPID и секрет расписания — `private/notify-keys.env` (не коммитить; открытый ключ VAPID — в `src/config.ts`). Сменить ключи = все устройства подписываются заново.
+- Правила «что запланировано на день» в `reminders.ts` дублируют `src/domain` (функция не может импортировать код приложения). Меняешь правило в приложении — меняй и там; тесты `reminders.test.ts` сверяют их.
+- Настройки уведомлений — запись `kind = 'setting'`, id `notify` (одна на аккаунт; часовой пояс берётся с устройства, сохранившего настройки).
 
 ## Заметки
 
@@ -55,8 +88,12 @@ npm run planner -- stats [--month YYYY-MM]
 - iOS: только вход по паролю (magic link открывается в Safari, а не в PWA); данные PWA на экране «Домой» отдельны от вкладки Safari. Базовые правила «как родное приложение» — скилл `mobile-native` (safe-area, `dvh`, инпуты ≥16px, hover только под `(hover: hover) and (pointer: fine)`).
 - Синхронизация: правка пишется локально → отправка в `records` с `updated_at` (мс устройства); сервер ставит `server_updated_at` триггером и отбрасывает более старые правки (LWW). Скачивание — по курсору `server_updated_at` (с небольшим перекрытием). Удаление = `deleted = true`.
 - Отметка привычки имеет детерминированный id `habitId+YYYY-MM-DD` — чтобы два устройства не плодили дубли.
-- Напоминания — ntfy через Supabase Cron (`pg_cron` + `pg_net`), **отдельный** топик, не тот, что для уведомлений Claude.
-- Структура: `src/db` (Dexie-схема, типы, `nextStamp`/сигнал локальных изменений) → `src/data` (все записи идут только через эти функции: ставят `dirty=1` и растущий `updatedAt`, шлют `emitLocalChange`) → `src/sync` (движок; облако за интерфейсом `Remote`, в тестах — `FakeRemote`) → `src/domain` (чистые расчёты, покрыты тестами) → `src/screens`, `src/ui`. Новая сущность = новая таблица в `createDb` (новая `version()`), строка в `SYNCED_TABLES`, функции в `src/data`.
+- Напоминания — Web Push через функцию Supabase `notify` и `pg_cron` (см. раздел выше). ntfy не используется.
+- Структура: `src/db` (Dexie-схема, типы, `nextStamp`/сигнал локальных изменений) → `src/data` (все записи идут только через эти функции — общие `insert/update/remove` в `entities.ts` и обёртки по разделам: ставят `dirty=1` и растущий `updatedAt`, шлют `emitLocalChange`) → `src/sync` (движок; облако за интерфейсом `Remote`, в тестах — `FakeRemote`) → `src/domain` (чистые расчёты: `habit-stats`, `tasks`, `money`, `goals`; покрыты тестами) → `src/screens`, `src/ui`. Новая сущность = тип в `db/types.ts`, таблица в `createDb` (новая `version()`) и в `SyncedTables`, строка в `SYNCED_TABLES`, функции в `src/data`, команды в `scripts/planner.ts`.
+- Детерминированные id там, где два устройства могут создать «одно и то же»: отметка привычки `habitId:date`, оплата платежа `pay:paymentId:dueDate`, настройки `notify`.
+- Деньги — в рублях (number), без копеечных целых; суммы округляются `roundMoney`. Накопления не считаются расходом: месяц = доходы − расходы − отложено.
+- Задачи «переносятся» сами: несделанные с прошлых дней показываются в «Просрочено» и на «Сегодня» (данные не меняются, кнопка «Всё на сегодня» — по желанию).
+- Прогресс цели: `auto` — среднее по привязанным привычкам (за год), проектам, накоплениям и шагам; `count` — `countBase` + все отметки привычки `countHabitId` из `countTarget`; `manual` — вручную. Привязка хранится у привычки/проекта/накопления (`goalId`).
 - Правило процентов: период (день/неделя/месяц) в «запланировано», только если он закончился или уже выполнен. Неделя относится к месяцу своего четверга. Не менять без согласования — на это завязаны тесты и смысл цифр.
 - **Демо-режим** для скриншотов без входа: `VITE_DEMO=1 npx vite build --outDir dist-demo` (своя база `planner-demo` с тестовыми привычками, облако-заглушка). В обычную сборку не попадает.
 - Скриншоты: puppeteer-core из `..\site-to-pdf\node_modules` + свой статический сервер в том же процессе (фоновый `vite preview` из песочницы недоступен для других процессов). В Git Bash не передавать `#/route` через переменные окружения — MSYS превращает это в путь; передавать имя раздела и собирать `#/` в скрипте.

@@ -1,7 +1,9 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDb, type PlannerDB } from '../db/db'
+import { createDb, SYNCED_TABLES, type PlannerDB } from '../db/db'
 import { createHabit, habitLogId, toggleHabitLog, updateHabit } from '../data/habits'
+import { createPayment, togglePaid } from '../data/money'
+import { createTask, toggleTask } from '../data/tasks'
 import { serverTime } from './convert'
 import { createSyncEngine } from './engine'
 import type { OutgoingRow, Remote, RemoteRow } from './remote'
@@ -65,6 +67,38 @@ async function newHabit(db: PlannerDB, title = 'Зарядка') {
 }
 
 describe('синхронизация двух устройств', () => {
+  it('задачи и оплата платежа: без дублей, когда оплатили с обоих устройств', async () => {
+    const taskId = await createTask(phone, { title: 'Позвонить в банк', date: '2026-10-04' })
+    const paymentId = await createPayment(phone, {
+      title: 'Интернет',
+      emoji: '🌐',
+      kind: 'bill',
+      amount: 650,
+      category: 'connection',
+      schedule: { type: 'monthly', day: 5 },
+      startDate: '2026-10-05',
+      endDate: null,
+      note: '',
+    })
+    await createSyncEngine(phone, remote).sync()
+    await createSyncEngine(laptop, remote).sync()
+
+    const payment = (await laptop.payments.get(paymentId))!
+    await toggleTask(laptop, (await laptop.tasks.get(taskId))!, '2026-10-04')
+    // Оплатили на обоих устройствах, пока они не видели друг друга.
+    await togglePaid(laptop, payment, '2026-10-05', '2026-10-04')
+    later(1000)
+    await togglePaid(phone, payment, '2026-10-05', '2026-10-04')
+    await createSyncEngine(laptop, remote).sync()
+    await createSyncEngine(phone, remote).sync()
+
+    expect((await phone.tasks.get(taskId))?.doneAt).toBe('2026-10-04')
+    const paid = (await phone.transactions.toArray()).filter((t) => t.paymentId === paymentId && !t.deleted)
+    expect(paid).toHaveLength(1)
+    expect(paid[0].amount).toBe(650)
+  })
+
+
   it('привычка и отметка с телефона появляются на компьютере', async () => {
     const id = await newHabit(phone)
     await toggleHabitLog(phone, id, '2026-10-04')
@@ -176,11 +210,12 @@ describe('синхронизация двух устройств', () => {
     await laptop.meta.bulkPut(staleState)
     await createSyncEngine(laptop, remote).sync()
     expect(await laptop.habitLogs.count()).toBe(1)
-    expect((await laptop.meta.get('pullKinds'))?.value).toBe('habit,habitLog')
+    const allKinds = SYNCED_TABLES.map((t) => t.kind).join(',')
+    expect((await laptop.meta.get('pullKinds'))?.value).toBe(allKinds)
 
     // Контрольная проверка: с тем же курсором, но «знакомыми» видами записей ничего не скачалось бы.
     const control = createDb(`control-${n}`)
-    await control.meta.bulkPut([staleState[0], { key: 'pullKinds', value: 'habit,habitLog' }])
+    await control.meta.bulkPut([staleState[0], { key: 'pullKinds', value: allKinds }])
     await createSyncEngine(control, remote).sync()
     expect(await control.habitLogs.count()).toBe(0)
     await control.delete()

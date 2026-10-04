@@ -1,9 +1,11 @@
 import type { ComponentType } from 'preact'
 import { useHashRoute } from '../lib/hooks'
 import { IconFinance, IconGoals, IconHabits, IconSettings, IconTasks, IconToday } from '../ui/icons'
-import { ComingSoonScreen } from './coming-soon'
+import { FinanceScreen } from './finance'
+import { GoalsScreen } from './goals'
 import { HabitsScreen } from './habits'
 import { SettingsScreen } from './settings'
+import { TasksScreen } from './tasks'
 import { TodayScreen } from './today'
 
 const TABS: { route: string; label: string; Icon: ComponentType<{ size?: number }> }[] = [
@@ -44,9 +46,9 @@ export function Shell() {
       <main class="main" key={route}>
         {route === 'today' && <TodayScreen />}
         {route === 'habits' && <HabitsScreen />}
-        {route === 'tasks' && <ComingSoonScreen section="tasks" />}
-        {route === 'finance' && <ComingSoonScreen section="finance" />}
-        {route === 'goals' && <ComingSoonScreen section="goals" />}
+        {route === 'tasks' && <TasksScreen />}
+        {route === 'finance' && <FinanceScreen />}
+        {route === 'goals' && <GoalsScreen />}
         {route === 'settings' && <SettingsScreen />}
       </main>
     </div>

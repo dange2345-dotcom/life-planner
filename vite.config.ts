@@ -29,6 +29,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
         navigateFallback: `${BASE}index.html`,
+        // Обработчики пуш-уведомлений (показ и нажатие) — public/push-sw.js.
+        importScripts: ['push-sw.js'],
       },
     }),
   ],

@@ -38,6 +38,7 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
   const [startDate, setStartDate] = useState(editing?.startDate ?? props.today)
   // Последний день курса (например, лекарства на 28 дней). Пусто — без срока.
   const [until, setUntil] = useState(editing?.archivedAt ?? '')
+  const [times, setTimes] = useState<string[]>(editing?.remindAt ?? [])
   const [error, setError] = useState<string | null>(null)
   const isArchived = editing?.archivedAt != null && editing.archivedAt < props.today
 
@@ -61,7 +62,8 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
     if (!startDate) return setError('Укажите дату начала')
     if (until && until < startDate) return setError('Дата окончания раньше даты начала')
 
-    const fields = { title: title.trim(), emoji, schedule: schedule(), startDate, archivedAt: until || null }
+    const remindAt = [...new Set(times.filter(Boolean))].sort()
+    const fields = { title: title.trim(), emoji, schedule: schedule(), startDate, archivedAt: until || null, remindAt }
     if (editing) await updateHabit(db, editing.id, fields)
     else await createHabit(db, fields)
     props.onClose()
@@ -150,6 +152,31 @@ export function HabitForm(props: { habit?: Habit; today: DateKey; onClose: () =>
           <span>Закончить после (необязательно — например, курс лекарств)</span>
           <input type="date" value={until} min={startDate} onInput={(e) => setUntil(e.currentTarget.value)} />
         </label>
+
+        <div class="field">
+          <span>Напомнить, если ещё не отмечено</span>
+          <div class="time-list">
+            {times.map((time, i) => (
+              <span class="time-item">
+                <input
+                  type="time"
+                  class="time-input"
+                  value={time}
+                  aria-label={`Время напоминания ${i + 1}`}
+                  onChange={(e) => setTimes(times.map((t, j) => (j === i ? e.currentTarget.value : t)))}
+                />
+                <button type="button" class="icon-btn icon-btn--small" aria-label="Убрать время" onClick={() => setTimes(times.filter((_, j) => j !== i))}>
+                  ×
+                </button>
+              </span>
+            ))}
+            {times.length < 4 && (
+              <button type="button" class="btn btn--secondary btn--small" onClick={() => setTimes([...times, times.length ? '20:00' : '09:00'])}>
+                + Время
+              </button>
+            )}
+          </div>
+        </div>
 
         {error && (
           <p class="error" role="alert">

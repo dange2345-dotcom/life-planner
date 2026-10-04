@@ -13,6 +13,8 @@ export interface HabitInput {
   startDate: DateKey
   /** Последний день (курс на срок); null — без срока. */
   archivedAt?: DateKey | null
+  /** Время напоминаний «HH:MM». */
+  remindAt?: string[]
 }
 
 export async function createHabit(db: PlannerDB, input: HabitInput): Promise<string> {

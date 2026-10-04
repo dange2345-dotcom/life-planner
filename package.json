@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "test": "vitest run",
     "icons": "pwa-assets-generator",
-    "planner": "tsx scripts/planner.ts"
+    "planner": "tsx scripts/planner.ts",
+    "supabase": "tsx scripts/supabase-admin.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

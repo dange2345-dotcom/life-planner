@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { useApp } from '../app-context'
 import { useSyncState } from '../lib/hooks'
-import { IconClose, IconSettings } from './icons'
+import { IconCheck, IconChevronLeft, IconChevronRight, IconClose, IconSettings } from './icons'
 
 /** Кольцо-«метр»: заливка — насыщенный голубой, дорожка — светлая ступень того же цвета. */
 export function Ring(props: { value: number | null; size?: number; stroke?: number; children?: ComponentChildren }) {
@@ -142,6 +142,51 @@ export function syncLabel(status: string, pending: number): { tone: 'ok' | 'busy
     default:
       return pending ? { tone: 'busy', text: 'Сохраняю…' } : { tone: 'ok', text: 'Синхронизировано' }
   }
+}
+
+/** Выключатель (как в настройках iPhone). */
+export function Switch(props: { checked: boolean; onChange: (checked: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.checked}
+      aria-label={props.label}
+      class={`switch${props.checked ? ' switch--on' : ''}`}
+      onClick={() => props.onChange(!props.checked)}
+    >
+      <span class="switch__thumb" />
+    </button>
+  )
+}
+
+/** ‹ Период › и «Сегодня», если ушли от текущего. */
+export function PeriodNav(props: { title: string; onShift: (direction: -1 | 1) => void; onToday?: () => void; isCurrent: boolean }) {
+  return (
+    <div class="period-nav">
+      <button class="icon-btn" onClick={() => props.onShift(-1)} aria-label="Назад">
+        <IconChevronLeft size={20} />
+      </button>
+      <span class="period-nav__title">{props.title}</span>
+      <button class="icon-btn" onClick={() => props.onShift(1)} aria-label="Вперёд">
+        <IconChevronRight size={20} />
+      </button>
+      {!props.isCurrent && props.onToday && (
+        <button class="btn btn--ghost btn--small" onClick={props.onToday}>
+          Сегодня
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Круглая галочка «сделано» для задач и платежей. */
+export function CheckButton(props: { done: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" class={`check-btn${props.done ? ' check-btn--done' : ''}`} aria-pressed={props.done} aria-label={props.label} onClick={props.onClick}>
+      <IconCheck size={15} />
+    </button>
+  )
 }
 
 export function EmptyState(props: { title: string; text?: string; children?: ComponentChildren }) {

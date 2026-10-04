@@ -114,3 +114,24 @@ export function formatWeekRange(weekStartKey: DateKey): string {
   const left = sameMonth ? format(fromKey(weekStartKey), 'd') : formatDayMonth(weekStartKey)
   return `${left} – ${formatDayMonth(end)}`
 }
+
+/** «Сегодня», «Завтра», «Вчера» или «ср, 7 окт». */
+export function formatRelative(key: DateKey, today: DateKey): string {
+  const diff = diffDays(key, today)
+  if (diff === 0) return 'Сегодня'
+  if (diff === 1) return 'Завтра'
+  if (diff === -1) return 'Вчера'
+  const sameYear = key.slice(0, 4) === today.slice(0, 4)
+  return format(fromKey(key), sameYear ? 'EEEEEE, d MMM' : 'd MMM yyyy', { locale: ru }).replace('.', '')
+}
+
+/** «Среда, 7 октября» */
+export function formatDayLong(key: DateKey): string {
+  const text = format(fromKey(key), 'EEEE, d MMMM', { locale: ru })
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/** «7 окт 2027» / «7 окт» для текущего года. */
+export function formatDate(key: DateKey, today: DateKey): string {
+  return key.slice(0, 4) === today.slice(0, 4) ? formatDayMonth(key) : `${formatDayMonth(key)} ${key.slice(0, 4)}`
+}
