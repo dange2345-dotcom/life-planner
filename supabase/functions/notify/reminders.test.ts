@@ -141,8 +141,8 @@ describe('напоминания', () => {
       data({ habits: [habit('a', { type: 'daily' }, { title: 'Зубы', emoji: '🦷' })], tasks }),
       { date: TODAY, time: '21:30' },
     )
-    expect(messages.map((m) => m.title)).toEqual(['📌 Отправить отчёт', 'Как прошёл день?'])
-    expect(messages[1].body).toBe('Отмечено 0 из 1. Осталось: 🦷 Зубы\nНе сделано 1 задача: Отправить отчёт')
+    expect(messages.map((m) => m.title)).toEqual(['📌 Отправить отчёт', 'Ещё осталось сегодня'])
+    expect(messages[1].body).toBe('Не отмечено (1 из 1): 🦷 Зубы\nНе сделано: Отправить отчёт')
   })
 
   it('вечером всё сделано — не беспокоим', () => {

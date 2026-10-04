@@ -220,10 +220,10 @@ export function eveningMessage(data: UserData, today: DateKey): PushMessage | nu
 
   const lines: string[] = []
   if (left.length) {
-    lines.push(`Отмечено ${habits.length - left.length} из ${habits.length}. Осталось: ${listNames(left.map((h) => `${h.habit.emoji} ${h.habit.title}`))}`)
+    lines.push(`Не отмечено (${left.length} из ${habits.length}): ${listNames(left.map((h) => `${h.habit.emoji} ${h.habit.title}`), 5)}`)
   }
-  if (taskCount) lines.push(`Не сделано ${taskCount} ${plural(taskCount, 'задача', 'задачи', 'задач')}: ${listNames([...tasks.overdue, ...tasks.today].map((t) => t.title), 3)}`)
-  return { title: 'Как прошёл день?', body: lines.join('\n'), tag: `evening:${today}`, url: '#/today' }
+  if (taskCount) lines.push(`Не сделано: ${listNames([...tasks.overdue, ...tasks.today].map((t) => t.title), 5)}`)
+  return { title: 'Ещё осталось сегодня', body: lines.join('\n'), tag: `evening:${today}`, url: '#/today' }
 }
 
 /** Все напоминания, которые нужно отправить в эту минуту. */
