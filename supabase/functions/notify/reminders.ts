@@ -199,11 +199,12 @@ export function morningMessage(data: UserData, today: DateKey): PushMessage | nu
   const payTomorrow = unpaid(data, addDays(today, 1))
 
   const lines: string[] = []
-  if (habits.length) lines.push(`Привычки: ${habits.length}`)
-  if (tasks.today.length || tasks.overdue.length) {
-    const overdue = tasks.overdue.length ? ` (+${tasks.overdue.length} ${plural(tasks.overdue.length, 'просрочена', 'просрочены', 'просрочено')})` : ''
-    lines.push(`Задачи: ${tasks.today.length}${overdue}${tasks.today.length ? ` — ${listNames(tasks.today.map((t) => t.title), 2)}` : ''}`)
+  const todo = [...tasks.overdue, ...tasks.today]
+  if (todo.length) {
+    const overdue = tasks.overdue.length ? ` (${tasks.overdue.length} ${plural(tasks.overdue.length, 'просрочена', 'просрочены', 'просрочено')})` : ''
+    lines.push(`Сделать: ${listNames(todo.map((t) => t.title), 5)}${overdue}`)
   }
+  if (habits.length) lines.push(`Привычки: ${habits.length}`)
   for (const p of payToday) lines.push(`Сегодня платёж: ${p.emoji} ${p.title} — ${formatMoney(p.amount)}`)
   for (const p of payTomorrow) lines.push(`Завтра платёж: ${p.emoji} ${p.title} — ${formatMoney(p.amount)}`)
   if (lines.length === 0) return null

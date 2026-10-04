@@ -57,9 +57,9 @@ export async function registerDevice(db: PlannerDB, subscription: PushSubscripti
     },
     id,
   )
-  // Первое включение — сохраняем настройки по умолчанию с часовым поясом устройства.
+  // Сохраняем настройки (или значения по умолчанию) с часовым поясом этого устройства.
   const settings = await db.settings.get(NOTIFY_ID)
-  if (!settings || settings.deleted) await saveNotify(db, defaultNotify())
+  await saveNotify(db, readNotify(settings && !settings.deleted ? settings.value : undefined))
   return id
 }
 
