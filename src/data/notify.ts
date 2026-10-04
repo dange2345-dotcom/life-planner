@@ -20,6 +20,7 @@ export function defaultNotify(): NotifySettings {
     evening: { enabled: true, time: '21:30' },
     habits: true,
     tasks: true,
+    tasksEarly: true,
     timezone: deviceTimezone(),
   }
 }

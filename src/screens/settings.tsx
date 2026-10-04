@@ -212,6 +212,13 @@ function NotificationsCard() {
           </span>
           <Switch checked={settings.tasks} onChange={(tasks) => change({ tasks })} label="Напоминания задач" />
         </div>
+        <div class="setting-row">
+          <span>
+            <b>Важные задачи — за час</b>
+            <span class="muted small">Высокий приоритет: ещё одно напоминание за час до времени</span>
+          </span>
+          <Switch checked={settings.tasksEarly} onChange={(tasksEarly) => change({ tasksEarly })} label="Важные задачи за час" />
+        </div>
       </div>
       <p class="hint">Часовой пояс: {settings.timezone}. Настройки общие для всех устройств.</p>
     </section>

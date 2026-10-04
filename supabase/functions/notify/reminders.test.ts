@@ -5,6 +5,7 @@ import { buildLogIndex, todayItems } from '../../../src/domain/habit-stats'
 import { dueDates } from '../../../src/domain/money'
 import {
   addDays,
+  addMinutes,
   anythingDue,
   DEFAULT_SETTINGS,
   dueMessages,
@@ -143,6 +144,32 @@ describe('напоминания', () => {
     )
     expect(messages.map((m) => m.title)).toEqual(['📌 Отправить отчёт', 'Ещё осталось сегодня'])
     expect(messages[1].body).toBe('Не отмечено (1 из 1): 🦷 Зубы\nНе сделано: Отправить отчёт')
+  })
+
+  it('важная задача — ещё и за час; обычная — только в срок', () => {
+    const tasks = [
+      { id: 'hi', title: 'Сдать отчёт', date: TODAY, time: '15:00', priority: 3, doneAt: null },
+      { id: 'mid', title: 'Позвонить', date: TODAY, time: '15:00', priority: 2, doneAt: null },
+      { id: 'old', title: 'Старая без приоритета', date: TODAY, time: '15:00', doneAt: null },
+    ]
+    const early = dueMessages(data({ tasks }), { date: TODAY, time: '14:00' })
+    expect(early).toEqual([{ title: '❗ Сдать отчёт', body: 'Через час, в 15:00 · высокий приоритет', tag: 'task-early:hi', url: '#/tasks' }])
+    expect(dueMessages(data({ tasks }), { date: TODAY, time: '15:00' }).map((m) => m.tag)).toEqual(['task:hi', 'task:mid', 'task:old'])
+    expect(anythingDue(DEFAULT_SETTINGS, [], tasks, { date: TODAY, time: '14:00' })).toBe(true)
+    expect(anythingDue(DEFAULT_SETTINGS, [], tasks, { date: TODAY, time: '14:01' })).toBe(false)
+
+    const off = { ...DEFAULT_SETTINGS, tasksEarly: false }
+    expect(dueMessages(data({ tasks, settings: off }), { date: TODAY, time: '14:00' })).toEqual([])
+    expect(anythingDue(off, [], tasks, { date: TODAY, time: '14:00' })).toBe(false)
+    const done = [{ ...tasks[0], doneAt: TODAY }]
+    expect(dueMessages(data({ tasks: done }), { date: TODAY, time: '14:00' })).toEqual([])
+  })
+
+  it('за час — через полночь', () => {
+    const tasks = [{ id: 'n', title: 'Рейс', date: '2026-10-05', time: '00:30', priority: 3, doneAt: null }]
+    expect(dueMessages(data({ tasks }), { date: TODAY, time: '23:30' }).map((m) => m.tag)).toEqual(['task-early:n'])
+    expect(addMinutes({ date: '2026-12-31', time: '23:15' }, 60)).toEqual({ date: '2027-01-01', time: '00:15' })
+    expect(addMinutes({ date: TODAY, time: '09:59' }, 60)).toEqual({ date: TODAY, time: '10:59' })
   })
 
   it('вечером всё сделано — не беспокоим', () => {

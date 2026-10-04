@@ -193,6 +193,8 @@ export interface NotifySettings {
   /** Напоминания по времени у привычек и задач. */
   habits: boolean
   tasks: boolean
+  /** Задачам с высоким приоритетом — ещё и за час до времени. */
+  tasksEarly: boolean
   /** Часовой пояс IANA (с устройства) — сервер считает время напоминаний в нём. */
   timezone: string
 }

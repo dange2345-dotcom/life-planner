@@ -26,7 +26,8 @@
 //   npm run planner -- edit-goal <ref> [те же поля] [--done|--undo]
 //   npm run planner -- link <goal-ref> --habit|--project|--saving <ref> [--undo]
 //
-//   npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off]
+//   npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off] [--early on|off]
+//     --early — задачам с высоким приоритетом ещё и за час до времени
 //
 // <ref> — начало id или часть названия (без учёта регистра).
 // Ключ: SUPABASE_SECRET_KEY в life-planner/.env (только на этом компьютере, в git не попадает).
@@ -346,6 +347,7 @@ const { positionals, values } = parseArgs({
     evening: { type: 'string' },
     habits: { type: 'string' },
     tasks: { type: 'string' },
+    early: { type: 'string' },
   },
 })
 const [command, ref] = positionals
@@ -814,6 +816,7 @@ switch (command) {
       evening: { enabled: true, time: '21:30' },
       habits: true,
       tasks: true,
+      tasksEarly: true,
       timezone: 'Europe/Moscow',
       ...((row && !row.deleted ? row.value : {}) as Partial<NotifySettings>),
     }
@@ -826,12 +829,13 @@ switch (command) {
       evening: slot(values.evening, current.evening),
       habits: flag(values.habits, current.habits),
       tasks: flag(values.tasks, current.tasks),
+      tasksEarly: flag(values.early, current.tasksEarly),
     }
-    const changed = [values.morning, values.evening, values.habits, values.tasks].some((v) => v !== undefined)
+    const changed = [values.morning, values.evening, values.habits, values.tasks, values.early].some((v) => v !== undefined)
     if (changed) await save('setting', { id: 'notify', value: next, updatedAt: row?.updatedAt ?? 0, deleted: 0, dirty: 0 } as Setting)
     const on = (s: { enabled: boolean; time: string }) => (s.enabled ? s.time : 'выкл')
     console.log(
-      `${changed ? '✔ ' : ''}Утро ${on(next.morning)} · вечер ${on(next.evening)} · привычки ${next.habits ? 'вкл' : 'выкл'} · задачи ${next.tasks ? 'вкл' : 'выкл'} · пояс ${next.timezone}`,
+      `${changed ? '✔ ' : ''}Утро ${on(next.morning)} · вечер ${on(next.evening)} · привычки ${next.habits ? 'вкл' : 'выкл'} · задачи ${next.tasks ? 'вкл' : 'выкл'} · важные за час ${next.tasksEarly ? 'вкл' : 'выкл'} · пояс ${next.timezone}`,
     )
     const subs = (await load<SyncMeta & { device: string }>('pushSub')).filter((s) => !s.deleted)
     console.log(`Устройства с уведомлениями: ${subs.length ? subs.map((s) => s.device).join(', ') : 'нет'}`)

@@ -28,8 +28,14 @@ export interface TaskRec {
   title: string
   date: DateKey | null
   time: string | null
+  /** 0 — нет … 3 — высокий. */
+  priority?: number
   doneAt: DateKey | null
 }
+
+/** Задачам с высоким приоритетом — ещё одно напоминание заранее. */
+export const HIGH_PRIORITY = 3
+export const EARLY_MINUTES = 60
 
 export type PaymentSchedule =
   | { type: 'monthly'; day: number }
@@ -51,6 +57,8 @@ export interface NotifySettings {
   evening: { enabled: boolean; time: string }
   habits: boolean
   tasks: boolean
+  /** Задачам с высоким приоритетом — ещё и за час. */
+  tasksEarly: boolean
   timezone: string
 }
 
@@ -59,6 +67,7 @@ export const DEFAULT_SETTINGS: NotifySettings = {
   evening: { enabled: true, time: '21:30' },
   habits: true,
   tasks: true,
+  tasksEarly: true,
   timezone: 'Europe/Moscow',
 }
 
@@ -104,6 +113,15 @@ export function addDays(key: DateKey, days: number): DateKey {
   const date = toUtc(key)
   date.setUTCDate(date.getUTCDate() + days)
   return date.toISOString().slice(0, 10)
+}
+
+/** Время через `minutes` минут по часам владельца (с переходом через полночь). */
+export function addMinutes(now: LocalNow, minutes: number): LocalNow {
+  const total = Number(now.time.slice(0, 2)) * 60 + Number(now.time.slice(3, 5)) + minutes
+  const days = Math.floor(total / 1440)
+  const rest = total - days * 1440
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return { date: addDays(now.date, days), time: `${pad(Math.floor(rest / 60))}:${pad(rest % 60)}` }
 }
 
 /** ISO: 1 = пн … 7 = вс. */
@@ -183,6 +201,11 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many
 }
 
+/** Важная задача, время которой — `soon` (момент через EARLY_MINUTES). */
+function earlyDue(task: TaskRec, soon: LocalNow): boolean {
+  return task.doneAt === null && task.priority === HIGH_PRIORITY && task.date === soon.date && task.time === soon.time
+}
+
 function openTasks(tasks: TaskRec[], today: DateKey) {
   const open = tasks.filter((t) => t.doneAt === null && t.date !== null && t.date <= today)
   return { today: open.filter((t) => t.date === today), overdue: open.filter((t) => t.date! < today) }
@@ -258,6 +281,15 @@ export function dueMessages(data: UserData, now: LocalNow): PushMessage[] {
     }
   }
 
+  if (settings.tasksEarly) {
+    const soon = addMinutes(now, EARLY_MINUTES)
+    for (const task of data.tasks) {
+      if (!earlyDue(task, soon)) continue
+      // Свой tag: с тем же, что у напоминания «в срок», браузер потом заменил бы уведомление молча, без звука.
+      messages.push({ title: `❗ ${task.title}`, body: `Через час, в ${task.time} · высокий приоритет`, tag: `task-early:${task.id}`, url: '#/tasks' })
+    }
+  }
+
   if (settings.evening.enabled && settings.evening.time === now.time) {
     const message = eveningMessage(data, now.date)
     if (message) messages.push(message)
@@ -271,6 +303,7 @@ export function anythingDue(settings: NotifySettings, habits: HabitRec[], tasks:
     (settings.morning.enabled && settings.morning.time === now.time) ||
     (settings.evening.enabled && settings.evening.time === now.time) ||
     (settings.habits && habits.some((h) => (h.remindAt ?? []).includes(now.time))) ||
-    (settings.tasks && tasks.some((t) => t.date === now.date && t.time === now.time))
+    (settings.tasks && tasks.some((t) => t.date === now.date && t.time === now.time)) ||
+    (settings.tasksEarly && tasks.some((t) => earlyDue(t, addMinutes(now, EARLY_MINUTES))))
   )
 }

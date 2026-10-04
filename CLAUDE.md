@@ -50,7 +50,7 @@ npm run planner -- payments | add-payment --title --amount --next YYYY-MM-DD [--
 
 npm run planner -- goals [--year] | add-goal --title --sphere growth [--measure auto|count|manual] [--target --base --habit <ref>] [--value]
 npm run planner -- edit-goal <ref> [...] [--done|--undo] | link <goal> --habit|--project|--saving <ref> [--undo]
-npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off]
+npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off] [--early on|off]
 ```
 
 - `<ref>` — начало id или часть названия. Дни недели ISO: 1 = пн … 7 = вс. Эмодзи подбирать по смыслу (без флагов — Windows их не рисует).
@@ -72,7 +72,7 @@ npm run supabase -- logs [мин]    # журнал функции
 npm run supabase -- sql "…"       # выполнить SQL
 ```
 
-- Пуши — **Web Push от самого приложения** (не ntfy): устройство подписывается в «Настройки → Уведомления» (iPhone — только из приложения на экране «Домой», iOS 16.4+), подписка хранится записью `kind = 'pushSub'`. Функция `notify` (Deno, без библиотек: `webpush.ts` — RFC 8291 + VAPID, проверено эталоном RFC; `reminders.ts` — что и когда слать, сверено тестами с `src/domain`) раз в минуту читает `records` секретным ключом и шлёт напоминания: утренний план, вечерний итог, время у привычки (`remindAt`) и у задачи (`time`), платежи сегодня/завтра — в утреннем плане.
+- Пуши — **Web Push от самого приложения** (не ntfy): устройство подписывается в «Настройки → Уведомления» (iPhone — только из приложения на экране «Домой», iOS 16.4+), подписка хранится записью `kind = 'pushSub'`. Функция `notify` (Deno, без библиотек: `webpush.ts` — RFC 8291 + VAPID, проверено эталоном RFC; `reminders.ts` — что и когда слать, сверено тестами с `src/domain`) раз в минуту читает `records` секретным ключом и шлёт напоминания: утренний план, вечерний итог, время у привычки (`remindAt`) и у задачи (`time`; задаче с высоким приоритетом — ещё и за час, настройка `tasksEarly`), платежи сегодня/завтра — в утреннем плане.
 - Ключи VAPID и секрет расписания — `private/notify-keys.env` (не коммитить; открытый ключ VAPID — в `src/config.ts`). Сменить ключи = все устройства подписываются заново.
 - Правила «что запланировано на день» в `reminders.ts` дублируют `src/domain` (функция не может импортировать код приложения). Меняешь правило в приложении — меняй и там; тесты `reminders.test.ts` сверяют их.
 - Настройки уведомлений — запись `kind = 'setting'`, id `notify` (одна на аккаунт; часовой пояс берётся с устройства, сохранившего настройки).
