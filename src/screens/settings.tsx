@@ -219,6 +219,12 @@ function NotificationsCard() {
           </span>
           <Switch checked={settings.tasksEarly} onChange={(tasksEarly) => change({ tasksEarly })} label="Важные задачи за час" />
         </div>
+        <TimeSetting
+          title="Учёба"
+          hint="Если сегодня ещё не занимались — с часами за неделю"
+          value={settings.study}
+          onChange={(study) => change({ study })}
+        />
       </div>
       <p class="hint">Часовой пояс: {settings.timezone}. Настройки общие для всех устройств.</p>
     </section>

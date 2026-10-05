@@ -3,9 +3,10 @@ import { useApp } from '../app-context'
 import { createGoal, deleteGoal, setGoalLinks, updateGoal, type LinkTable } from '../data/goals'
 import { useHabitsData } from '../data/use-habits'
 import { useRows } from '../data/use-data'
+import { useRouteData } from '../data/use-route'
 import type { Goal, GoalMeasure, GoalStep, Habit, Project, Saving } from '../db/types'
 import { formatDate, type DateKey } from '../domain/dates'
-import { goalCount, goalParts, goalProgress, sphereInfo, SPHERES, yearSummary, type GoalContext } from '../domain/goals'
+import { goalCount, goalParts, goalProgress, sphereInfo, SPHERES, yearSummary, type GoalContext, type RouteSummary } from '../domain/goals'
 import { useToday } from '../lib/hooks'
 import { EmptyState, PeriodNav, ProgressBar, Ring, ScreenHeader, Segmented, Sheet } from '../ui/components'
 import { IconCheck, IconPlus } from '../ui/icons'
@@ -98,9 +99,10 @@ function useGoalContext(today: DateKey): GoalContext {
   const tasks = useRows('tasks') ?? []
   const savings = useRows('savings') ?? []
   const savingEntries = useRows('savingEntries') ?? []
+  const { summaries: routes } = useRouteData()
   return useMemo(
-    () => ({ habits, index, projects, tasks, savings, savingEntries, today }),
-    [habits, index, projects, tasks, savings, savingEntries, today],
+    () => ({ habits, index, projects, tasks, savings, savingEntries, routes, today }),
+    [habits, index, projects, tasks, savings, savingEntries, routes, today],
   )
 }
 
@@ -180,6 +182,8 @@ function GoalForm(props: { goal?: Goal; year: number; ctx: GoalContext; onClose:
   const [habitLinks, setHabitLinks] = useState(() => linkedSet(ctx.habits))
   const [projectLinks, setProjectLinks] = useState(() => linkedSet(ctx.projects))
   const [savingLinks, setSavingLinks] = useState(() => linkedSet(ctx.savings))
+  // Маршрут привязывается на стороне цели (его содержание перезаписывается при обновлении плана).
+  const [routeLinks, setRouteLinks] = useState(() => new Set(editing?.routeId ? [editing.routeId] : []))
 
   const activeHabits = ctx.habits.filter((h) => h.archivedAt === null || h.archivedAt >= ctx.today || habitLinks.has(h.id))
   const activeProjects = ctx.projects.filter((p) => !p.doneAt || projectLinks.has(p.id))
@@ -198,6 +202,7 @@ function GoalForm(props: { goal?: Goal; year: number; ctx: GoalContext; onClose:
       countHabitId: countHabitId || null,
       manualValue,
       steps,
+      routeId: [...routeLinks][0] ?? null,
     }
   }
 
@@ -270,7 +275,7 @@ function GoalForm(props: { goal?: Goal; year: number; ctx: GoalContext; onClose:
           <Segmented label="Как считать прогресс" value={measure} options={MEASURES} onChange={setMeasure} />
         </div>
 
-        {measure === 'auto' && <p class="hint">Среднее по привязанным привычкам (выполнение за год), проектам (доля сделанных задач), накоплениям и шагам.</p>}
+        {measure === 'auto' && <p class="hint">Среднее по привязанным привычкам (выполнение за год), проектам (доля сделанных задач), накоплениям, учебному маршруту и шагам.</p>}
         {measure === 'count' && (
           <div class="inline-panel stack-sm">
             <div class="field-row">
@@ -368,6 +373,16 @@ function GoalForm(props: { goal?: Goal; year: number; ctx: GoalContext; onClose:
           empty="Цели накоплений — в разделе «Финансы»"
           describe={(s: Saving) => `${s.emoji} ${s.title}`}
         />
+        {(ctx.routes ?? []).length > 0 && (
+          <LinkPicker
+            title="Учебный маршрут"
+            items={ctx.routes ?? []}
+            selected={routeLinks}
+            onChange={(next) => setRouteLinks(new Set([...next].filter((id) => !routeLinks.has(id)).slice(0, 1)))}
+            empty=""
+            describe={(r: RouteSummary) => `📘 ${r.title} · ${r.pct}%`}
+          />
+        )}
 
         <div class="field-row">
           <label class="field">

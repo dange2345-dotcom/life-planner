@@ -1,21 +1,19 @@
 import { Fragment } from 'preact'
-import { useMemo, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { useApp } from '../app-context'
 import { setRouteBranch, setRouteMark } from '../data/route'
-import { useRow, useRows } from '../data/use-data'
-import type { Route, RouteFork, RouteItem, RouteStage } from '../db/types'
-import { ROUTE_ID, onBranch, resolveBranch, routeBranchSettingId, routeProgress, topicCount, type StageProgress } from '../domain/route'
+import { useRouteData } from '../data/use-route'
+import type { Route, RouteFork, RouteItem, RouteStage, StudyTimer } from '../db/types'
+import { ROUTE_ID, onBranch, routeProgress, topicCount, type StageProgress } from '../domain/route'
 import { EmptyState, ProgressBar, Ring, ScreenHeader } from '../ui/components'
 import { IconCheck, IconChevronRight } from '../ui/icons'
+import { StudyHours } from './study-hours'
 
 export function StudyScreen() {
   const { db } = useApp()
-  const route = useRow('routes', ROUTE_ID)
-  const marks = useRows('routeMarks')
-  const branchSetting = useRow('settings', routeBranchSettingId(ROUTE_ID))
-  const done = useMemo(() => new Set((marks ?? []).filter((m) => m.routeId === ROUTE_ID).map((m) => m.key)), [marks])
+  const { route, done, branch, weeklyHours, timer } = useRouteData()
 
-  if (route === undefined || marks === undefined) return <ScreenHeader title="Учёба" />
+  if (route === undefined) return <ScreenHeader title="Учёба" />
   if (route === null) {
     return (
       <>
@@ -28,20 +26,31 @@ export function StudyScreen() {
     )
   }
 
-  const branch = resolveBranch(route, branchSetting?.value)
   const toggle = (key: string) => void setRouteMark(db, ROUTE_ID, key, !done.has(key))
-  return <RouteView route={route} branch={branch} done={done} onToggle={toggle} onBranch={(b) => void setRouteBranch(db, ROUTE_ID, b)} />
+  return (
+    <RouteView
+      route={route}
+      branch={branch}
+      done={done}
+      weeklyHours={weeklyHours}
+      timer={timer}
+      onToggle={toggle}
+      onBranch={(b) => void setRouteBranch(db, ROUTE_ID, b)}
+    />
+  )
 }
 
 interface ViewProps {
   route: Route
   branch: string
   done: ReadonlySet<string>
+  weeklyHours: number
+  timer: StudyTimer | null
   onToggle: (key: string) => void
   onBranch: (branch: string) => void
 }
 
-function RouteView({ route, branch, done, onToggle, onBranch: chooseBranch }: ViewProps) {
+function RouteView({ route, branch, done, weeklyHours, timer, onToggle, onBranch: chooseBranch }: ViewProps) {
   const progress = routeProgress(route, branch, done)
   const here = progress.here
   // Раскрыт этап «Вы здесь»; дальше пользователь раскрывает и сворачивает сам.
@@ -72,6 +81,8 @@ function RouteView({ route, branch, done, onToggle, onBranch: chooseBranch }: Vi
           </p>
         </div>
       </section>
+
+      <StudyHours weeklyHours={weeklyHours} timer={timer} />
 
       {(route.facts.length > 0 || topics > 0) && (
         <div class="route-facts">

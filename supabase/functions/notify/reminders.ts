@@ -59,6 +59,8 @@ export interface NotifySettings {
   tasks: boolean
   /** Задачам с высоким приоритетом — ещё и за час. */
   tasksEarly: boolean
+  /** Учёба: напомнить в это время, если сегодня ещё не занимались. */
+  study: { enabled: boolean; time: string }
   timezone: string
 }
 
@@ -68,7 +70,26 @@ export const DEFAULT_SETTINGS: NotifySettings = {
   habits: true,
   tasks: true,
   tasksEarly: true,
+  study: { enabled: true, time: '19:00' },
   timezone: 'Europe/Moscow',
+}
+
+/** Настройки из записи: у старых нет поля «учёба» (или оно неполное) — подставляем значения по умолчанию. */
+export function readSettings(saved: Partial<NotifySettings> | undefined): NotifySettings {
+  const value = saved ?? {}
+  return { ...DEFAULT_SETTINGS, ...value, study: { ...DEFAULT_SETTINGS.study, ...value.study } }
+}
+
+/** Учёба владельца на эту неделю (как в src/domain/study.ts). */
+export interface StudyData {
+  /** Минут за неделю (пн–вс). */
+  weekMinutes: number
+  /** Минут сегодня. */
+  todayMinutes: number
+  /** Цель по часам в неделю. */
+  targetHours: number
+  /** Идёт таймер занятия — значит, уже занимается. */
+  timerRunning: boolean
 }
 
 export interface UserData {
@@ -80,6 +101,8 @@ export interface UserData {
   payments: PaymentRec[]
   /** id операций-оплат: `pay:${paymentId}:${dueDate}`. */
   paid: Set<string>
+  /** null — учебного маршрута нет (или данные не загружались). */
+  study?: StudyData | null
 }
 
 /* ===================== Даты ===================== */
@@ -249,6 +272,29 @@ export function eveningMessage(data: UserData, today: DateKey): PushMessage | nu
   return { title: 'Ещё осталось сегодня', body: lines.join('\n'), tag: `evening:${today}`, url: '#/today' }
 }
 
+/** «45 мин», «2 ч», «1 ч 30 мин» — как formatMinutes в src/domain/study.ts. */
+export function formatMinutes(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes))
+  const h = Math.floor(m / 60)
+  const rest = m % 60
+  if (h === 0) return `${rest} мин`
+  return rest ? `${h} ч ${rest} мин` : `${h} ч`
+}
+
+/** Напоминание об учёбе: только если сегодня ещё не занимались, таймер не идёт и недельная цель не выполнена. */
+export function studyMessage(study: StudyData | null | undefined, today: DateKey): PushMessage | null {
+  if (!study || study.timerRunning || study.todayMinutes > 0) return null
+  const left = study.targetHours * 60 - study.weekMinutes
+  if (left <= 0) return null
+  const done = study.weekMinutes > 0 ? `За неделю ${formatMinutes(study.weekMinutes)} из ${study.targetHours} ч` : `На этой неделе ещё 0 из ${study.targetHours} ч`
+  return {
+    title: '📘 Пора учиться',
+    body: `Сегодня занятий ещё не было. ${done} — осталось ${formatMinutes(left)}.`,
+    tag: `study:${today}`,
+    url: '#/study',
+  }
+}
+
 /** Все напоминания, которые нужно отправить в эту минуту. */
 export function dueMessages(data: UserData, now: LocalNow): PushMessage[] {
   const { settings } = data
@@ -290,11 +336,21 @@ export function dueMessages(data: UserData, now: LocalNow): PushMessage[] {
     }
   }
 
+  if (settings.study.enabled && settings.study.time === now.time) {
+    const message = studyMessage(data.study, now.date)
+    if (message) messages.push(message)
+  }
+
   if (settings.evening.enabled && settings.evening.time === now.time) {
     const message = eveningMessage(data, now.date)
     if (message) messages.push(message)
   }
   return messages
+}
+
+/** Нужно ли в эту минуту загружать данные учёбы. */
+export function studyDue(settings: NotifySettings, now: LocalNow): boolean {
+  return settings.study.enabled && settings.study.time === now.time
 }
 
 /** Нужно ли в эту минуту вообще что-то проверять — чтобы не грузить отметки и платежи без надобности. */
@@ -304,6 +360,7 @@ export function anythingDue(settings: NotifySettings, habits: HabitRec[], tasks:
     (settings.evening.enabled && settings.evening.time === now.time) ||
     (settings.habits && habits.some((h) => (h.remindAt ?? []).includes(now.time))) ||
     (settings.tasks && tasks.some((t) => t.date === now.date && t.time === now.time)) ||
-    (settings.tasksEarly && tasks.some((t) => earlyDue(t, addMinutes(now, EARLY_MINUTES))))
+    (settings.tasksEarly && tasks.some((t) => earlyDue(t, addMinutes(now, EARLY_MINUTES)))) ||
+    studyDue(settings, now)
   )
 }

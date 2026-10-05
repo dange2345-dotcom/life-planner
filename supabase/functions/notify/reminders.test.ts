@@ -3,15 +3,19 @@ import type { Habit, Payment } from '../../../src/db/types'
 import { addDaysKey, isoWeekday } from '../../../src/domain/dates'
 import { buildLogIndex, todayItems } from '../../../src/domain/habit-stats'
 import { dueDates } from '../../../src/domain/money'
+import { formatMinutes as appFormatMinutes } from '../../../src/domain/study'
 import {
   addDays,
   addMinutes,
   anythingDue,
   DEFAULT_SETTINGS,
   dueMessages,
+  formatMinutes,
   habitsToday,
   localNow,
   paymentDueOn,
+  readSettings,
+  studyMessage,
   weekday,
   type UserData,
 } from './reminders.ts'
@@ -175,5 +179,44 @@ describe('напоминания', () => {
   it('вечером всё сделано — не беспокоим', () => {
     const at = { date: TODAY, time: '21:30' }
     expect(dueMessages(data({ habits: [habit('a', { type: 'daily' })], logs: new Set(['a:2026-10-04']) }), at)).toEqual([])
+  })
+})
+
+describe('учёба', () => {
+  const at = { date: TODAY, time: '19:00' }
+  const study = { weekMinutes: 330, todayMinutes: 0, targetHours: 18, timerRunning: false }
+
+  it('напоминает, если сегодня не занимались и недельная цель не выполнена', () => {
+    expect(dueMessages(data({ study }), at)).toEqual([
+      {
+        title: '📘 Пора учиться',
+        body: 'Сегодня занятий ещё не было. За неделю 5 ч 30 мин из 18 ч — осталось 12 ч 30 мин.',
+        tag: `study:${TODAY}`,
+        url: '#/study',
+      },
+    ])
+    expect(studyMessage({ ...study, weekMinutes: 0 }, TODAY)?.body).toBe('Сегодня занятий ещё не было. На этой неделе ещё 0 из 18 ч — осталось 18 ч.')
+    expect(anythingDue(DEFAULT_SETTINGS, [], [], at)).toBe(true)
+    expect(anythingDue(DEFAULT_SETTINGS, [], [], { date: TODAY, time: '19:01' })).toBe(false)
+  })
+
+  it('молчит: уже занимался сегодня, идёт таймер, цель выполнена, нет маршрута, выключено', () => {
+    expect(studyMessage({ ...study, todayMinutes: 30 }, TODAY)).toBeNull()
+    expect(studyMessage({ ...study, timerRunning: true }, TODAY)).toBeNull()
+    expect(studyMessage({ ...study, weekMinutes: 18 * 60 }, TODAY)).toBeNull()
+    expect(studyMessage(null, TODAY)).toBeNull()
+    const off = readSettings({ study: { enabled: false, time: '19:00' } })
+    expect(dueMessages(data({ study, settings: off }), at)).toEqual([])
+    expect(anythingDue(off, [], [], at)).toBe(false)
+  })
+
+  it('старые настройки без поля «учёба» — по умолчанию вкл в 19:00; время своё — сохраняется', () => {
+    const legacy = { morning: { enabled: false, time: '07:00' } } as Partial<typeof DEFAULT_SETTINGS>
+    expect(readSettings(legacy)).toMatchObject({ morning: { enabled: false, time: '07:00' }, study: { enabled: true, time: '19:00' } })
+    expect(readSettings({ study: { time: '20:30' } } as Partial<typeof DEFAULT_SETTINGS>).study).toEqual({ enabled: true, time: '20:30' })
+  })
+
+  it('формат часов совпадает с приложением', () => {
+    for (const m of [0, 1, 45, 60, 90, 330, 1080, 1439]) expect(formatMinutes(m)).toBe(appFormatMinutes(m))
   })
 })

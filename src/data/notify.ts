@@ -21,6 +21,7 @@ export function defaultNotify(): NotifySettings {
     habits: true,
     tasks: true,
     tasksEarly: true,
+    study: { enabled: true, time: '19:00' },
     timezone: deviceTimezone(),
   }
 }
@@ -29,7 +30,13 @@ export function defaultNotify(): NotifySettings {
 export function readNotify(value: unknown): NotifySettings {
   const base = defaultNotify()
   const saved = (value ?? {}) as Partial<NotifySettings>
-  return { ...base, ...saved, morning: { ...base.morning, ...saved.morning }, evening: { ...base.evening, ...saved.evening } }
+  return {
+    ...base,
+    ...saved,
+    morning: { ...base.morning, ...saved.morning },
+    evening: { ...base.evening, ...saved.evening },
+    study: { ...base.study, ...saved.study },
+  }
 }
 
 /** Сохранить настройки; часовой пояс берётся с текущего устройства. */

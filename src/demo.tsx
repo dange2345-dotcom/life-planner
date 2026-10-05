@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { AppContext, type AppContextValue } from './app-context'
 import { createDb, type PlannerDB } from './db/db'
 import type { Habit, HabitLog, Route, SyncMeta } from './db/types'
-import { addDaysKey, todayKey } from './domain/dates'
+import { addDaysKey, todayKey, weekStart } from './domain/dates'
 import { ROUTE_ID, routeMarkId, stageKeys } from './domain/route'
 import { habitLogId } from './data/habits'
 import { createSyncEngine } from './sync/engine'
@@ -112,6 +112,16 @@ async function seedRoute(db: PlannerDB) {
   const [first, second] = content.stages
   const keys = [...stageKeys(first), ...(second ? stageKeys(second).filter((_, i) => i % 3 === 0) : [])]
   await db.routeMarks.bulkPut(keys.map((key) => ({ id: routeMarkId(ROUTE_ID, key), routeId: ROUTE_ID, key, ...row })))
+  // Часы: прошлая неделя целиком и эта — до сегодняшнего дня включительно.
+  const today = todayKey()
+  const monday = addDaysKey(weekStart(today), -7)
+  const minutes = [120, 90, 0, 150, 60, 240, 180, 90, 120, 0, 150, 60, 240, 180]
+  await db.studySessions.bulkPut(
+    minutes
+      .map((m, i) => ({ date: addDaysKey(monday, i), m }))
+      .filter(({ date, m }) => m > 0 && date <= today)
+      .map(({ date, m }) => ({ id: `study-${date}`, routeId: ROUTE_ID, date, minutes: m, note: date === today ? 'повторение и задачи' : '', ...row })),
+  )
 }
 
 async function seedSections(db: PlannerDB) {

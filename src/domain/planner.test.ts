@@ -264,6 +264,16 @@ describe('цели', () => {
     expect(goalProgress(counter, ctx)).toBe(25)
   })
 
+  it('авто: привязанный учебный маршрут — ещё одна часть', () => {
+    const routes = [{ id: 'main', title: 'Маршрут', done: 57, total: 569, pct: 10 }]
+    const withRoute = { ...goal, routeId: 'main' }
+    expect(goalParts(withRoute, { ...ctx, routes }).at(-1)).toMatchObject({ kind: 'route', pct: 10, detail: '57 из 569' })
+    expect(goalProgress(withRoute, { ...ctx, routes })).toBe(34) // (67 + 25 + 10) / 3
+    // Только маршрут: процент цели = процент маршрута. Маршрута нет в контексте — часть не считается.
+    expect(goalProgress({ ...withRoute, id: 'solo' }, { ...ctx, routes })).toBe(10)
+    expect(goalProgress({ ...withRoute, id: 'solo' }, ctx)).toBeNull()
+  })
+
   it('вручную, достигнута, нечего считать', () => {
     expect(goalProgress({ ...goal, measure: 'manual', manualValue: 30 }, ctx)).toBe(30)
     expect(goalProgress({ ...goal, doneAt: TODAY }, ctx)).toBe(100)

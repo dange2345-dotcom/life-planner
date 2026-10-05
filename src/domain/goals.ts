@@ -21,6 +21,15 @@ export function sphereInfo(id: string): { id: string; title: string; emoji: stri
   return SPHERES.find((s) => s.id === id) ?? { id, title: 'Другое', emoji: '🎯' }
 }
 
+/** Учебный маршрут для целей: название и прогресс (считается в domain/route.ts). */
+export interface RouteSummary {
+  id: string
+  title: string
+  done: number
+  total: number
+  pct: number
+}
+
 export interface GoalContext {
   habits: Habit[]
   index: LogIndex
@@ -28,11 +37,13 @@ export interface GoalContext {
   tasks: Task[]
   savings: Saving[]
   savingEntries: SavingEntry[]
+  /** Учебные маршруты (обычно один). */
+  routes?: RouteSummary[]
   today: DateKey
 }
 
 export interface GoalPart {
-  kind: 'habit' | 'project' | 'saving' | 'steps'
+  kind: 'habit' | 'project' | 'saving' | 'route' | 'steps'
   id: string
   title: string
   emoji: string
@@ -78,6 +89,11 @@ export function goalParts(goal: Goal, ctx: GoalContext): GoalPart[] {
     if (saving.goalId !== goal.id) continue
     const stats = savingStats(saving, ctx.savingEntries, ctx.today)
     parts.push({ kind: 'saving', id: saving.id, title: saving.title, emoji: saving.emoji, pct: stats.pct, detail: '' })
+  }
+
+  const route = goal.routeId ? ctx.routes?.find((r) => r.id === goal.routeId) : undefined
+  if (route) {
+    parts.push({ kind: 'route', id: route.id, title: route.title, emoji: '📘', pct: route.pct, detail: `${route.done} из ${route.total}` })
   }
 
   if (goal.steps.length > 0) {

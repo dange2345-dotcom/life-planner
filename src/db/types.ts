@@ -176,6 +176,8 @@ export interface Goal extends SyncMeta {
   steps: GoalStep[]
   doneAt: DateKey | null
   order: number
+  /** Привязанный учебный маршрут: его процент входит в прогресс цели. У старых записей поля нет. */
+  routeId?: string | null
 }
 
 /* ===================== Настройки и уведомления ===================== */
@@ -195,6 +197,8 @@ export interface NotifySettings {
   tasks: boolean
   /** Задачам с высоким приоритетом — ещё и за час до времени. */
   tasksEarly: boolean
+  /** Учёба: в это время, если сегодня ещё не занимались (и недельная цель по часам не выполнена). */
+  study: { enabled: boolean; time: string }
   /** Часовой пояс IANA (с устройства) — сервер считает время напоминаний в нём. */
   timezone: string
 }
@@ -284,6 +288,27 @@ export interface Route extends SyncMeta {
 export interface RouteMark extends SyncMeta {
   routeId: string
   key: string
+}
+
+/** Настройки маршрута — значение записи settings `route:<id>`. */
+export interface RouteSettings {
+  /** Выбранная ветка после развилки. */
+  branch?: string
+  /** Цель по часам учёбы в неделю. */
+  weeklyHours?: number
+}
+
+/** Занятие: сколько минут учёбы в какой день. */
+export interface StudySession extends SyncMeta {
+  routeId: string
+  date: DateKey
+  minutes: number
+  note: string
+}
+
+/** Идущий таймер занятия — значение записи settings `study-timer` (общий для устройств: начал на одном, закончил на другом). */
+export interface StudyTimer {
+  startedAt: number
 }
 
 export interface MetaRow {

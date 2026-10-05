@@ -33,6 +33,12 @@
 //   npm run planner -- route-mark <ключ|текст> [--all] [--undo]   — отметить пункт (--all — все совпадения)
 //   npm run planner -- route-branch a|b|c               — выбрать ветку после развилки
 //   npm run planner -- route-import <страница.html>     — загрузить/обновить содержание маршрута со страницы
+//   npm run planner -- link <goal-ref> --route [--undo]  — процент маршрута входит в прогресс цели
+//
+//   npm run planner -- study [--week YYYY-MM-DD]        — часы учёбы за неделю (по дням, записи, идущий таймер)
+//   npm run planner -- add-study --minutes 90|--hours 1.5 [--date …] [--note …] | delete-study <id-ref>
+//   npm run planner -- study-target 18                  — цель по часам в неделю
+//   npm run planner -- notify --study HH:MM|off         — напоминание об учёбе (если сегодня ещё не занимался)
 //
 // <ref> — начало id или часть названия (без учёта регистра).
 // Ключ: SUPABASE_SECRET_KEY в life-planner/.env (только на этом компьютере, в git не попадает).
@@ -57,16 +63,19 @@ import type {
   Project,
   Route,
   RouteMark,
+  RouteSettings,
   RouteStage,
   Saving,
   SavingEntry,
   Setting,
+  StudySession,
+  StudyTimer,
   SyncMeta,
   Task,
   Transaction,
 } from '../src/db/types'
-import { addDaysKey, formatDayMonth, formatMonth, monthOf, todayKey, WEEKDAY_SHORT, type DateKey } from '../src/domain/dates'
-import { goalCount, goalParts, goalProgress, sphereInfo, SPHERES, type GoalContext } from '../src/domain/goals'
+import { addDaysKey, formatDayMonth, formatMonth, monthOf, todayKey, WEEKDAY_SHORT, weekStart, type DateKey } from '../src/domain/dates'
+import { goalCount, goalParts, goalProgress, sphereInfo, SPHERES, type GoalContext, type RouteSummary } from '../src/domain/goals'
 import { buildLogIndex, monthStats, streak, todayItems } from '../src/domain/habit-stats'
 import {
   buildPaidIndex,
@@ -95,6 +104,7 @@ import {
   routeProgress,
   stageKeys,
 } from '../src/domain/route'
+import { formatMinutes, readRouteSettings, STUDY_TIMER_ID, timerMinutes, weekPct, weekStudy } from '../src/domain/study'
 import { groupTasks, projectProgress } from '../src/domain/tasks'
 import { parseRouteHtml } from './route-import'
 
@@ -302,6 +312,7 @@ async function goalContext(): Promise<GoalContext> {
     tasks: await loadAll<Task>('task'),
     savings: await loadAll<Saving>('saving'),
     savingEntries: await loadAll<SavingEntry>('savingEntry'),
+    routes: await routeSummaries(),
     today,
   }
 }
@@ -336,6 +347,30 @@ interface RouteState {
   done: Set<string>
   marks: Map<string, RouteMark>
   branchRow: Setting | undefined
+}
+
+/** Маршруты для целей (пусто, если маршрута ещё нет). */
+async function routeSummaries(): Promise<RouteSummary[]> {
+  const route = (await load<Route>('route')).find((r) => r.id === ROUTE_ID && !r.deleted)
+  if (!route) return []
+  const { branch, done } = await loadRoute()
+  const p = routeProgress(route, branch, done)
+  return [{ id: route.id, title: route.title, done: p.done, total: p.total, pct: p.pct }]
+}
+
+async function loadSessions(): Promise<StudySession[]> {
+  return (await load<StudySession>('studySession')).filter((s) => !s.deleted && s.routeId === ROUTE_ID)
+}
+
+async function weeklyHours(): Promise<{ hours: number; row: Setting | undefined }> {
+  const row = (await load<Setting>('setting')).find((s) => s.id === routeBranchSettingId(ROUTE_ID))
+  return { hours: readRouteSettings(row && !row.deleted ? row.value : undefined).weeklyHours, row }
+}
+
+function weekLine(sessions: StudySession[], hours: number, weekKey: DateKey): string {
+  const w = weekStudy(sessions, weekKey)
+  const days = w.byDay.map((m, i) => `${WEEKDAY_SHORT[i]} ${m ? formatMinutes(m) : '—'}`).join(' · ')
+  return `Неделя ${formatDayMonth(weekKey)} – ${formatDayMonth(addDaysKey(weekKey, 6))}: ${formatMinutes(w.total)} из ${hours} ч (${weekPct(w.total, hours)}%)\n  ${days}`
 }
 
 async function loadRoute(): Promise<RouteState> {
@@ -414,6 +449,11 @@ const { positionals, values } = parseArgs({
     habits: { type: 'string' },
     tasks: { type: 'string' },
     early: { type: 'string' },
+    study: { type: 'string' },
+    route: { type: 'boolean' },
+    minutes: { type: 'string' },
+    hours: { type: 'string' },
+    week: { type: 'string' },
   },
 })
 const [command, ref] = positionals
@@ -868,7 +908,13 @@ switch (command) {
       const saving = find(await loadAll<Saving>('saving'), 'Накопления', values.saving)
       await save('saving', { ...saving, goalId })
       console.log(`✔ ${saving.emoji} ${saving.title} ${goalId ? '→' : '✕'} ${goal.title}`)
-    } else fail('Нужно --habit, --project или --saving')
+    } else if (values.route) {
+      // Маршрут привязывается на стороне цели: его содержание перезаписывается при route-import.
+      const { route } = await loadRoute()
+      const next: Goal = { ...goal, routeId: values.undo ? null : route.id }
+      await save('goal', next)
+      console.log(`✔ 📘 ${route.title} ${values.undo ? '✕' : '→'} ${goal.title}\n${describeGoal(next, await goalContext())}`)
+    } else fail('Нужно --habit, --project, --saving или --route')
     break
   }
 
@@ -877,6 +923,7 @@ switch (command) {
   case 'notify': {
     const rows = await load<Setting>('setting')
     const row = rows.find((r) => r.id === 'notify')
+    const saved = (row && !row.deleted ? row.value : {}) as Partial<NotifySettings>
     const current: NotifySettings = {
       morning: { enabled: true, time: '08:00' },
       evening: { enabled: true, time: '21:30' },
@@ -884,7 +931,9 @@ switch (command) {
       tasks: true,
       tasksEarly: true,
       timezone: 'Europe/Moscow',
-      ...((row && !row.deleted ? row.value : {}) as Partial<NotifySettings>),
+      ...saved,
+      // Как в приложении (data/notify.ts): у старых настроек поля «учёба» нет — по умолчанию вкл в 19:00.
+      study: { enabled: true, time: '19:00', ...saved.study },
     }
     const slot = (value: string | undefined, prev: { enabled: boolean; time: string }) =>
       value === undefined ? prev : value === 'off' ? { ...prev, enabled: false } : { enabled: true, time: checkTime(value) }
@@ -896,12 +945,13 @@ switch (command) {
       habits: flag(values.habits, current.habits),
       tasks: flag(values.tasks, current.tasks),
       tasksEarly: flag(values.early, current.tasksEarly),
+      study: slot(values.study, current.study),
     }
-    const changed = [values.morning, values.evening, values.habits, values.tasks, values.early].some((v) => v !== undefined)
+    const changed = [values.morning, values.evening, values.habits, values.tasks, values.early, values.study].some((v) => v !== undefined)
     if (changed) await save('setting', { id: 'notify', value: next, updatedAt: row?.updatedAt ?? 0, deleted: 0, dirty: 0 } as Setting)
     const on = (s: { enabled: boolean; time: string }) => (s.enabled ? s.time : 'выкл')
     console.log(
-      `${changed ? '✔ ' : ''}Утро ${on(next.morning)} · вечер ${on(next.evening)} · привычки ${next.habits ? 'вкл' : 'выкл'} · задачи ${next.tasks ? 'вкл' : 'выкл'} · важные за час ${next.tasksEarly ? 'вкл' : 'выкл'} · пояс ${next.timezone}`,
+      `${changed ? '✔ ' : ''}Утро ${on(next.morning)} · вечер ${on(next.evening)} · привычки ${next.habits ? 'вкл' : 'выкл'} · задачи ${next.tasks ? 'вкл' : 'выкл'} · важные за час ${next.tasksEarly ? 'вкл' : 'выкл'} · учёба ${on(next.study)} · пояс ${next.timezone}`,
     )
     const subs = (await load<SyncMeta & { device: string }>('pushSub')).filter((s) => !s.deleted)
     console.log(`Устройства с уведомлениями: ${subs.length ? subs.map((s) => s.device).join(', ') : 'нет'}`)
@@ -927,6 +977,62 @@ switch (command) {
     }
     const other = route.stages.filter((s) => !onBranch(s, branch) && p.stages.get(s.id)!.done > 0)
     if (other.length) console.log(`Отметки в других ветках: ${other.map((s) => `${stageLabel(s)} — ${p.stages.get(s.id)!.done}`).join(', ')}`)
+    console.log(weekLine(await loadSessions(), (await weeklyHours()).hours, weekStart(today)))
+    break
+  }
+
+  /* ---------- часы учёбы ---------- */
+
+  case 'study': {
+    const weekKey = weekStart(values.week ? checkDate(values.week, today) : today)
+    const sessions = await loadSessions()
+    console.log(weekLine(sessions, (await weeklyHours()).hours, weekKey))
+    for (const s of weekStudy(sessions, weekKey).sessions) {
+      console.log(`  ${short(s.id)}  ${formatDayMonth(s.date)} · ${formatMinutes(s.minutes)}${s.note ? ` · ${s.note}` : ''}`)
+    }
+    const timer = (await load<Setting>('setting')).find((s) => s.id === STUDY_TIMER_ID && !s.deleted)
+    if (timer) {
+      const startedAt = (timer.value as StudyTimer).startedAt
+      console.log(`⏱ Идёт занятие с ${new Date(startedAt).toLocaleString('ru-RU')} (${formatMinutes(timerMinutes(startedAt, Date.now()))})`)
+    }
+    break
+  }
+
+  case 'add-study': {
+    const minutes = values.minutes ? Number(values.minutes) : values.hours ? Number(values.hours.replace(',', '.')) * 60 : NaN
+    if (!(minutes > 0 && minutes <= 16 * 60)) fail('Нужно --minutes 90 или --hours 1.5 (не больше 16 ч)')
+    const session: StudySession = {
+      id: randomUUID(),
+      routeId: ROUTE_ID,
+      date: checkDate(values.date, today),
+      minutes: Math.round(minutes),
+      note: values.note?.trim() ?? '',
+      updatedAt: 0,
+      deleted: 0,
+      dirty: 0,
+    }
+    await save('studySession', session)
+    console.log(`✔ ${formatDayMonth(session.date)} · ${formatMinutes(session.minutes)}${session.note ? ` · ${session.note}` : ''}`)
+    console.log(weekLine(await loadSessions(), (await weeklyHours()).hours, weekStart(session.date)))
+    break
+  }
+
+  case 'delete-study': {
+    if (!ref) fail('Нужно начало id записи (видно в npm run planner -- study)')
+    const matches = (await loadSessions()).filter((s) => s.id.startsWith(ref))
+    if (matches.length !== 1) fail(matches.length ? `«${ref}» подходит к нескольким записям` : `Запись «${ref}» не найдена`)
+    await save('studySession', matches[0], true)
+    console.log(`✖ Удалено: ${formatDayMonth(matches[0].date)} · ${formatMinutes(matches[0].minutes)}`)
+    break
+  }
+
+  case 'study-target': {
+    const hours = Number(ref?.replace(',', '.'))
+    if (!(hours >= 1 && hours <= 80)) fail('Часов в неделю: число от 1 до 80, например study-target 18')
+    const { row } = await weeklyHours()
+    const value: RouteSettings = { ...((row && !row.deleted ? row.value : {}) as RouteSettings), weeklyHours: Math.round(hours * 2) / 2 }
+    await save('setting', { id: routeBranchSettingId(ROUTE_ID), value, updatedAt: row?.updatedAt ?? 0, deleted: 0, dirty: 0 } satisfies Setting)
+    console.log(`✔ Цель: ${value.weeklyHours} ч в неделю`)
     break
   }
 
@@ -959,7 +1065,9 @@ switch (command) {
     const { route, branchRow } = await loadRoute()
     const info = route.branches.find((b) => b.id === ref)
     if (!info) fail(`Ветки: ${route.branches.map((b) => `${b.id} — ${b.name}`).join('; ')}`)
-    const setting: Setting = { id: routeBranchSettingId(ROUTE_ID), value: { branch: info.id }, updatedAt: branchRow?.updatedAt ?? 0, deleted: 0, dirty: 0 }
+    // Настройка общая с целью по часам — остальные поля сохраняем.
+    const prev = (branchRow && !branchRow.deleted ? branchRow.value : {}) as RouteSettings
+    const setting: Setting = { id: routeBranchSettingId(ROUTE_ID), value: { ...prev, branch: info.id }, updatedAt: branchRow?.updatedAt ?? 0, deleted: 0, dirty: 0 }
     await save('setting', setting)
     console.log(`✔ Ветка: ${info.label} — ${info.name}`)
     break
@@ -987,6 +1095,6 @@ switch (command) {
       'Команды: habits, add-habit, edit-habit, archive-habit, restore-habit, delete-habit, mark, stats, remind, ' +
         'tasks, add-task, edit-task, done-task, delete-task, projects, add-project, categories, add-expense, add-income, money, ' +
         'savings, add-saving, deposit, withdraw, payments, add-payment, pay, goals, add-goal, edit-goal, link, notify, ' +
-        'route, route-mark, route-branch, route-import',
+        'route, route-mark, route-branch, route-import, study, add-study, delete-study, study-target',
     )
 }
