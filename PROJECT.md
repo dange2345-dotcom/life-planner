@@ -71,6 +71,7 @@
 
 ## Следующие шаги
 
+- [ ] `npm run supabase -- logs` сломан: Supabase убрал `/analytics/endpoints/logs.all` (410) — перейти на `GET /v1/projects/{ref}/analytics/endpoints/logs`. Пока ответы функции видно так: `npm run supabase -- sql "select status_code, content::text, created from net._http_response order by created desc limit 5"`. Функция `notify` v3 (учёба) выложена 2026-10-05 — отвечает 200.
 - [ ] Учёба, дальше (по желанию): карточка учёбы на «Сегодня» (часы за неделю + кнопка таймера); итог недели в воскресенье; статистика часов по неделям за месяц.
 - [ ] Облако: старая запись маршрута `kind = 'route'`, id `ml` (первая загрузка до переименования в `main`) и удалённая отметка `ml:m.s0.0` — не нужны, приложение их не читает; можно пометить удалёнными, когда владелец разрешит.
 
