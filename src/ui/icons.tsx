@@ -62,6 +62,13 @@ export const IconGoals = (p: IconProps) => (
   </Svg>
 )
 
+export const IconStudy = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 6.8C10.2 5.4 7.6 4.7 3.8 4.7v13.1c3.8 0 6.4.7 8.2 2.1 1.8-1.4 4.4-2.1 8.2-2.1V4.7c-3.8 0-6.4.7-8.2 2.1Z" />
+    <path d="M12 6.8v13.1" />
+  </Svg>
+)
+
 export const IconSettings = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="3" />

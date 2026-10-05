@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { AppContext, type AppContextValue } from './app-context'
 import { createDb, type PlannerDB } from './db/db'
-import type { Habit, HabitLog } from './db/types'
+import type { Habit, HabitLog, Route, SyncMeta } from './db/types'
 import { addDaysKey, todayKey } from './domain/dates'
+import { ROUTE_ID, routeMarkId, stageKeys } from './domain/route'
 import { habitLogId } from './data/habits'
 import { createSyncEngine } from './sync/engine'
 import { Shell } from './screens/shell'
@@ -38,9 +39,80 @@ export function DemoApp() {
 async function seed(db: PlannerDB) {
   await seedHabits(db)
   if ((await db.tasks.count()) === 0) await seedSections(db)
+  if ((await db.routes.count()) === 0) await seedRoute(db)
 }
 
 const row = { updatedAt: 1, deleted: 0 as const, dirty: 0 as const }
+
+type RouteContent = Omit<Route, keyof SyncMeta>
+
+// Настоящий маршрут для скриншотов — private/demo-route.json (только на компьютере владельца, в git не попадает).
+// Если файла нет — короткий пример.
+const localRoutes = import.meta.glob<RouteContent>('../private/demo-route.json', { eager: true, import: 'default' })
+
+const DEMO_ROUTE: RouteContent = {
+  title: 'Учебный маршрут',
+  subtitle: 'Пример маршрута',
+  facts: [
+    { value: '≈ 20 недель', label: 'до цели' },
+    { value: '10 ч', label: 'в неделю' },
+  ],
+  rules: [
+    { title: 'Цель — часы, а не темы', text: 'Время можно спланировать, объём темы — нет.' },
+    { title: 'Пробелы — это нормально', text: 'Тема не далась — отметьте и вернитесь через пару дней.' },
+  ],
+  stages: [
+    {
+      id: 's0', no: '0', title: 'Старт', weeks: 'неделя 0 · ≈ 5 ч', what: 'Редактор, аккаунты, расписание.', why: 'Без среды первые недели уходят на установку.',
+      example: 'Расписать неделю в календаре.', result: 'Всё установлено.', nar: 'Тренажёр с задачами.',
+      milestones: [{ k: 'm.s0.0', t: 'Всё установлено' }, { k: 'm.s0.1', t: 'Неделя расписана' }],
+      groups: [],
+    },
+    {
+      id: 's1', no: '1', title: 'Основы', weeks: 'нед. 1–4 · ≈ 40 ч', what: 'Базовые понятия и первые упражнения.',
+      why: 'Без базы дальше не продвинуться.', example: 'Мини-проект на выходных.', result: 'Три мини-проекта.', nar: 'Карточки каждый день.',
+      milestones: [{ k: 'm.s1.0', t: 'Три мини-проекта' }, { k: 'm.s1.1', t: 'Объясню основы своими словами' }],
+      groups: [
+        { title: 'Теория', items: [{ k: 't.1', t: 'Тема 1' }, { k: 't.2', t: 'Тема 2' }, { k: 't.3', t: 'Тема 3' }, { k: 't.4', t: 'Тема 4' }] },
+        { title: 'Практика', items: [{ k: 'p.1', t: 'Упражнение 1' }, { k: 'p.2', t: 'Упражнение 2' }] },
+      ],
+    },
+    {
+      id: 's2a', no: '2', branch: 'a', title: 'Направление A', weeks: 'нед. 5–12 · ≈ 80 ч', what: 'Углубление по направлению A.', why: 'Нужна специализация.',
+      example: 'Проект по направлению.', result: 'Проект в портфолио.', nar: 'Вопросы по теме.',
+      milestones: [{ k: 'm.s2a.0', t: 'Проект A' }],
+      groups: [{ title: 'Темы A', items: [{ k: 'a.1', t: 'Тема A1' }, { k: 'a.2', t: 'Тема A2' }] }],
+    },
+    {
+      id: 's2b', no: '2', branch: 'b', title: 'Направление B', weeks: 'нед. 5–12 · ≈ 80 ч', what: 'Углубление по направлению B.', why: 'Нужна специализация.',
+      example: 'Проект по направлению.', result: 'Проект в портфолио.', nar: 'Вопросы по теме.',
+      milestones: [{ k: 'm.s2b.0', t: 'Проект B' }],
+      groups: [],
+    },
+  ],
+  branches: [
+    { id: 'a', label: 'Линия A', name: 'Направление A', hint: 'первый вариант' },
+    { id: 'b', label: 'Линия B', name: 'Направление B', hint: 'второй вариант' },
+  ],
+  defaultBranch: 'a',
+  fork: {
+    after: 's1',
+    weeks: 'конец нед. 4',
+    title: 'Выбор направления',
+    intro: 'Выберите ветку. Отметки в других ветках не пропадут.',
+    table: [{ label: 'Чем занимаетесь', cells: ['Первое', 'Второе'] }],
+    how: ['Посмотрите вакансии и выпишите требования.'],
+  },
+}
+
+async function seedRoute(db: PlannerDB) {
+  const content = Object.values(localRoutes)[0] ?? DEMO_ROUTE
+  await db.routes.put({ ...content, id: ROUTE_ID, ...row })
+  // Для вида: первый этап пройден, второй — начат.
+  const [first, second] = content.stages
+  const keys = [...stageKeys(first), ...(second ? stageKeys(second).filter((_, i) => i % 3 === 0) : [])]
+  await db.routeMarks.bulkPut(keys.map((key) => ({ id: routeMarkId(ROUTE_ID, key), routeId: ROUTE_ID, key, ...row })))
+}
 
 async function seedSections(db: PlannerDB) {
   const today = todayKey()

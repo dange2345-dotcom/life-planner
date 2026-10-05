@@ -207,6 +207,85 @@ export interface PushSub extends SyncMeta {
   createdAt: number
 }
 
+/* ===================== Учёба: маршрут ===================== */
+
+/** Пункт маршрута, который можно отметить. key — стабильный ключ (по нему хранится отметка). */
+export interface RouteItem {
+  k: string
+  t: string
+}
+
+/** Группа тем этапа (раскрывающийся список с отметками). */
+export interface RouteGroup {
+  title: string
+  /** Пояснение под заголовком, например «не заучивать». */
+  note?: string
+  items: RouteItem[]
+}
+
+export interface RouteStage {
+  id: string
+  /** Номер для показа: «0», «1», … */
+  no: string
+  title: string
+  /** «нед. 1–4 · ≈ 79 ч» */
+  weeks: string
+  what: string
+  why: string
+  example: string
+  result: string
+  /** Чем помогает тренажёр (сайт с задачами и вопросами). */
+  nar: string
+  /** Этап ветки после развилки; без ветки — общий. */
+  branch?: string
+  /** Необязательный этап: не входит в общий прогресс. */
+  optional?: boolean
+  milestones: RouteItem[]
+  groups: RouteGroup[]
+}
+
+export interface RouteBranch {
+  id: string
+  label: string
+  name: string
+  hint: string
+}
+
+export interface RouteFork {
+  /** id этапа, после которого стоит развилка. */
+  after: string
+  weeks: string
+  title: string
+  intro: string
+  /** Сравнение направлений: первая колонка — название строки, дальше — по ветке. */
+  table: { label: string; cells: string[] }[]
+  how: string[]
+}
+
+/**
+ * Учебный маршрут (сейчас один, id 'main'). Содержание пишет только Claude
+ * (`npm run planner -- route-import`), приложение его лишь показывает. Хранится в облаке, а не в коде:
+ * репозиторий публичный.
+ */
+export interface Route extends SyncMeta {
+  title: string
+  subtitle: string
+  /** Название тренажёра — подпись к полю nar у этапов. */
+  trainer?: string
+  facts: { value: string; label: string }[]
+  rules: { title: string; text: string }[]
+  stages: RouteStage[]
+  branches: RouteBranch[]
+  defaultBranch: string
+  fork: RouteFork | null
+}
+
+/** Отметка «пройдено». id = `${routeId}:${key}` — одинаковый на всех устройствах; снятие отметки = удаление. */
+export interface RouteMark extends SyncMeta {
+  routeId: string
+  key: string
+}
+
 export interface MetaRow {
   key: string
   value: unknown

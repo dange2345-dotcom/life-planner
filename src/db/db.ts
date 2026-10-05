@@ -8,6 +8,8 @@ import type {
   Payment,
   Project,
   PushSub,
+  Route,
+  RouteMark,
   Saving,
   SavingEntry,
   Setting,
@@ -30,6 +32,8 @@ export interface SyncedTables {
   goals: Goal
   settings: Setting
   pushSubs: PushSub
+  routes: Route
+  routeMarks: RouteMark
 }
 
 export type PlannerDB = Dexie & { [K in keyof SyncedTables]: EntityTable<SyncedTables[K], 'id'> } & {
@@ -50,6 +54,8 @@ export const SYNCED_TABLES = [
   { table: 'goals', kind: 'goal' },
   { table: 'settings', kind: 'setting' },
   { table: 'pushSubs', kind: 'pushSub' },
+  { table: 'routes', kind: 'route' },
+  { table: 'routeMarks', kind: 'routeMark' },
 ] as const satisfies readonly { table: keyof SyncedTables; kind: string }[]
 
 export type SyncedTableName = (typeof SYNCED_TABLES)[number]['table']
@@ -73,6 +79,11 @@ export function createDb(name = 'planner'): PlannerDB {
     goals: 'id, dirty',
     settings: 'id, dirty',
     pushSubs: 'id, dirty',
+  })
+  // Учёба: маршрут (содержание) и отметки пройденного.
+  db.version(3).stores({
+    routes: 'id, dirty',
+    routeMarks: 'id, dirty, routeId',
   })
   return db
 }

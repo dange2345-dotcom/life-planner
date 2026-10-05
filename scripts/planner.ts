@@ -29,11 +29,18 @@
 //   npm run planner -- notify [--morning HH:MM|off] [--evening HH:MM|off] [--habits on|off] [--tasks on|off] [--early on|off]
 //     --early — задачам с высоким приоритетом ещё и за час до времени
 //
+//   npm run planner -- route [<этап>]                  — прогресс учебного маршрута; с номером/id этапа — его вехи и темы
+//   npm run planner -- route-mark <ключ|текст> [--all] [--undo]   — отметить пункт (--all — все совпадения)
+//   npm run planner -- route-branch a|b|c               — выбрать ветку после развилки
+//   npm run planner -- route-import <страница.html>     — загрузить/обновить содержание маршрута со страницы
+//
 // <ref> — начало id или часть названия (без учёта регистра).
 // Ключ: SUPABASE_SECRET_KEY в life-planner/.env (только на этом компьютере, в git не попадает).
 
 import { parseArgs } from 'node:util'
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL } from '../src/config'
 import type {
@@ -48,6 +55,9 @@ import type {
   PaymentKind,
   Priority,
   Project,
+  Route,
+  RouteMark,
+  RouteStage,
   Saving,
   SavingEntry,
   Setting,
@@ -74,7 +84,19 @@ import {
   scheduleFromDate,
   totalsByCategory,
 } from '../src/domain/money'
+import {
+  findRouteItems,
+  findStage,
+  ROUTE_ID,
+  onBranch,
+  resolveBranch,
+  routeBranchSettingId,
+  routeMarkId,
+  routeProgress,
+  stageKeys,
+} from '../src/domain/route'
 import { groupTasks, projectProgress } from '../src/domain/tasks'
+import { parseRouteHtml } from './route-import'
 
 function fail(message: string): never {
   console.error(`✖ ${message}`)
@@ -304,6 +326,50 @@ function goalFields(prev: Partial<Goal>, habits: Habit[]): Partial<Goal> {
   if (values.year) changes.year = Number(values.year)
   if (values.note) changes.note = values.note
   return changes
+}
+
+/* ---------- учебный маршрут ---------- */
+
+interface RouteState {
+  route: Route
+  branch: string
+  done: Set<string>
+  marks: Map<string, RouteMark>
+  branchRow: Setting | undefined
+}
+
+async function loadRoute(): Promise<RouteState> {
+  const route = (await load<Route>('route')).find((r) => r.id === ROUTE_ID && !r.deleted)
+  if (!route) fail('Маршрута в облаке нет: npm run planner -- route-import <страница маршрута .html>')
+  const marks = new Map((await load<RouteMark>('routeMark')).filter((m) => m.routeId === ROUTE_ID).map((m) => [m.key, m]))
+  const branchRow = (await load<Setting>('setting')).find((s) => s.id === routeBranchSettingId(ROUTE_ID))
+  const branch = resolveBranch(route, branchRow && !branchRow.deleted ? branchRow.value : undefined)
+  const done = new Set([...marks.values()].filter((m) => !m.deleted).map((m) => m.key))
+  return { route, branch, done, marks, branchRow }
+}
+
+function stageLabel(stage: RouteStage): string {
+  return `этап ${stage.no}${stage.branch ? stage.branch.toUpperCase() : ''}`
+}
+
+function stageLine(stage: RouteStage, p: { done: number; total: number; pct: number }, here: boolean): string {
+  const icon = p.total > 0 && p.done === p.total ? '✔' : p.done > 0 ? '◐' : '○'
+  const tail = stage.optional ? ' · необязательный' : ''
+  return `${icon} ${here ? '▶ ' : ''}${stageLabel(stage)} · ${stage.title} · ${stage.weeks} · ${p.done}/${p.total} (${p.pct}%)${tail}`
+}
+
+function printStage(stage: RouteStage, done: Set<string>) {
+  const box = (k: string) => (done.has(k) ? '[x]' : '[ ]')
+  const keys = stageKeys(stage)
+  console.log(`${stageLabel(stage)} · ${stage.title} · ${stage.weeks} · ${keys.filter((k) => done.has(k)).length}/${keys.length}`)
+  if (stage.milestones.length) {
+    console.log('Вехи:')
+    for (const m of stage.milestones) console.log(`  ${box(m.k)} ${m.t}  (${m.k})`)
+  }
+  for (const group of stage.groups) {
+    console.log(`${group.title} · ${group.items.filter((i) => done.has(i.k)).length}/${group.items.length}`)
+    for (const item of group.items) console.log(`  ${box(item.k)} ${item.t}  (${item.k})`)
+  }
 }
 
 /* ---------- команды ---------- */
@@ -842,10 +908,85 @@ switch (command) {
     break
   }
 
+  /* ---------- учебный маршрут ---------- */
+
+  case 'route': {
+    const { route, branch, done } = await loadRoute()
+    const p = routeProgress(route, branch, done)
+    if (ref) {
+      printStage(findStage(route, branch, ref) ?? fail(`Этап «${ref}» не найден (номер или id, например 3 или s6b)`), done)
+      break
+    }
+    const info = route.branches.find((b) => b.id === branch)
+    console.log(`${route.title}: ${p.pct}% (${p.done} из ${p.total}) · ветка ${info?.label ?? branch} — ${info?.name ?? ''}`)
+    console.log(`Вы здесь: ${p.here ? `${stageLabel(p.here)} · ${p.here.title}` : 'маршрут пройден'}`)
+    for (const stage of route.stages) {
+      if (!onBranch(stage, branch)) continue
+      console.log(stageLine(stage, p.stages.get(stage.id)!, p.here === stage))
+      if (route.fork?.after === stage.id) console.log(`★ ${route.fork.title} · ${route.fork.weeks}`)
+    }
+    const other = route.stages.filter((s) => !onBranch(s, branch) && p.stages.get(s.id)!.done > 0)
+    if (other.length) console.log(`Отметки в других ветках: ${other.map((s) => `${stageLabel(s)} — ${p.stages.get(s.id)!.done}`).join(', ')}`)
+    break
+  }
+
+  case 'route-mark': {
+    if (!ref) fail('Нужен ключ пункта (m.s1.0, math.1.1) или часть текста')
+    const { route, branch, marks } = await loadRoute()
+    const hits = findRouteItems(route, branch, ref)
+    if (!hits.length) fail(`«${ref}» в маршруте не найдено`)
+    if (hits.length > 1 && !values.all) {
+      const list = hits.slice(0, 15).map((h) => `  ${h.item.k} · ${stageLabel(h.stage)} · ${h.item.t}`)
+      fail(`«${ref}» подходит к ${hits.length} пунктам (отметить все — --all):\n${list.join('\n')}${hits.length > 15 ? '\n  …' : ''}`)
+    }
+    for (const { stage, item } of hits) {
+      const prev = marks.get(item.k)
+      if (values.undo && (!prev || prev.deleted)) {
+        console.log(`· не был отмечен: ${stageLabel(stage)} · ${item.t}`)
+        continue
+      }
+      const mark: RouteMark = { id: routeMarkId(ROUTE_ID, item.k), routeId: ROUTE_ID, key: item.k, updatedAt: prev?.updatedAt ?? 0, deleted: 0, dirty: 0 }
+      await save('routeMark', mark, Boolean(values.undo))
+      console.log(`${values.undo ? '✖ снято' : '✔ отмечено'}: ${stageLabel(stage)} · ${item.t}`)
+    }
+    const after = await loadRoute()
+    const p = routeProgress(after.route, after.branch, after.done)
+    console.log(`Маршрут: ${p.pct}% (${p.done} из ${p.total}) · вы здесь: ${p.here ? `${stageLabel(p.here)} · ${p.here.title}` : 'маршрут пройден'}`)
+    break
+  }
+
+  case 'route-branch': {
+    const { route, branchRow } = await loadRoute()
+    const info = route.branches.find((b) => b.id === ref)
+    if (!info) fail(`Ветки: ${route.branches.map((b) => `${b.id} — ${b.name}`).join('; ')}`)
+    const setting: Setting = { id: routeBranchSettingId(ROUTE_ID), value: { branch: info.id }, updatedAt: branchRow?.updatedAt ?? 0, deleted: 0, dirty: 0 }
+    await save('setting', setting)
+    console.log(`✔ Ветка: ${info.label} — ${info.name}`)
+    break
+  }
+
+  case 'route-import': {
+    if (!ref) fail('Укажите путь к странице маршрута, HTML-страницу плана (лежит вне репозитория)')
+    let content: ReturnType<typeof parseRouteHtml>
+    try {
+      content = parseRouteHtml(readFileSync(resolve(ref), 'utf8'))
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+    const prev = (await load<Route>('route')).find((r) => r.id === ROUTE_ID)
+    await save('route', { ...content, id: ROUTE_ID, updatedAt: prev?.updatedAt ?? 0, deleted: 0, dirty: 0 } satisfies Route)
+    const keys = new Set(content.stages.flatMap(stageKeys))
+    const orphan = (await load<RouteMark>('routeMark')).filter((m) => m.routeId === ROUTE_ID && !m.deleted && !keys.has(m.key))
+    console.log(`✔ ${prev && !prev.deleted ? 'Обновлён' : 'Загружен'} «${content.title}»: этапов ${content.stages.length}, пунктов ${keys.size}`)
+    if (orphan.length) console.log(`⚠ Отметки, которых нет в новой версии (${orphan.length}): ${orphan.map((m) => m.key).join(', ')}`)
+    break
+  }
+
   default:
     fail(
       'Команды: habits, add-habit, edit-habit, archive-habit, restore-habit, delete-habit, mark, stats, remind, ' +
         'tasks, add-task, edit-task, done-task, delete-task, projects, add-project, categories, add-expense, add-income, money, ' +
-        'savings, add-saving, deposit, withdraw, payments, add-payment, pay, goals, add-goal, edit-goal, link, notify',
+        'savings, add-saving, deposit, withdraw, payments, add-payment, pay, goals, add-goal, edit-goal, link, notify, ' +
+        'route, route-mark, route-branch, route-import',
     )
 }
