@@ -1,10 +1,11 @@
 // Разбор страницы учебного маршрута (HTML-исходник плана) в содержание маршрута «Планера».
 // Файл лежит вне репозитория: само содержание в публичный код не попадает.
 //
-// Что берётся со страницы: данные этапов (STAGES, BRANCHES, cleanTitle — исполняется кусок её скрипта между
-// «var RENAME» и «Состояние»), темы из <script id="topics-data">, правила, факты, развилка (forkHtml).
+// Что берётся со страницы: данные этапов (STAGES, BRANCHES и stageGroups — исполняется кусок её скрипта между
+// «Данные» и «Состояние»), правила, факты, развилка (forkHtml). stageGroups(этап) отдаёт блоки тем уже с ключами:
+// той же функцией страница рисует себя, поэтому ключи на странице и в «Планере» совпадают.
 
-import type { Route, RouteGroup, RouteItem, RouteStage, SyncMeta } from '../src/db/types'
+import type { Route, RouteGroup, RouteStage, SyncMeta } from '../src/db/types'
 
 export type RouteContent = Omit<Route, keyof SyncMeta>
 
@@ -17,30 +18,34 @@ interface PageStage {
   why?: string
   example?: string
   result?: string
+  learn?: string
   nar?: string
   branch?: string
   optional?: boolean
   fork?: boolean
   milestones?: string[]
-  extra?: { title: string; items: string[] }[]
 }
 
-type TopicGroups = Record<string, { title: string; items: RouteItem[] }[]>
-
-const OVERVIEW_NOTE = 'Не заучивать: знать, что это, чем отличается и зачем появилось.'
+/** Блок тем в том виде, как его отдаёт stageGroups на странице (пустые поля — пустые строки). */
+interface PageGroup {
+  title: string
+  note: string
+  learn: string
+  practice: string
+  items: { k: string; t: string; d: string }[]
+}
 
 export function parseRouteHtml(html: string): RouteContent {
-  const topics = JSON.parse(pick(html, /<script type="application\/json" id="topics-data">([\s\S]*?)<\/script>/, 'темы (topics-data)')) as TopicGroups
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])
   const script = scripts.find((s) => s.includes('var STAGES')) ?? fail('на странице нет скрипта с STAGES')
 
-  const from = script.indexOf('var RENAME')
+  const from = script.indexOf('/* ── Данные ── */')
   const to = script.indexOf('/* ── Состояние ── */')
-  if (from < 0 || to < from) fail('не найден блок данных (от «var RENAME» до «Состояние»)')
-  const data = new Function(`${script.slice(from, to)}\nreturn { STAGES, BRANCHES, cleanTitle }`)() as {
+  if (from < 0 || to < from) fail('не найден блок данных (от «Данные» до «Состояние»)')
+  const data = new Function(`${script.slice(from, to)}\nreturn { STAGES, BRANCHES, stageGroups }`)() as {
     STAGES: PageStage[]
     BRANCHES: Record<string, { label: string; name: string; hint: string }>
-    cleanTitle: (title: string, stageId: string) => string
+    stageGroups: (stage: PageStage) => PageGroup[]
   }
 
   const stages: RouteStage[] = []
@@ -50,13 +55,13 @@ export function parseRouteHtml(html: string): RouteContent {
       forkAfter = stages.at(-1)?.id ?? fail('развилка стоит раньше первого этапа')
       continue
     }
-    const groups: RouteGroup[] = [
-      ...(s.extra ?? []).map((g, gi) => ({ title: g.title, items: g.items.map((t, i) => ({ k: `c.${s.id}.${gi}.${i}`, t })) })),
-      ...(topics[s.id] ?? []).map((g) => {
-        const title = data.cleanTitle(g.title, s.id)
-        return { title, ...(/обзор|общих чертах/.test(title) ? { note: OVERVIEW_NOTE } : {}), items: g.items.map(({ k, t }) => ({ k, t })) }
-      }),
-    ]
+    const groups: RouteGroup[] = data.stageGroups(s).map((g) => ({
+      title: g.title,
+      ...(g.note ? { note: g.note } : {}),
+      ...(g.learn ? { learn: g.learn } : {}),
+      ...(g.practice ? { practice: g.practice } : {}),
+      items: g.items.map(({ k, t, d }) => ({ k, t, ...(d ? { d } : {}) })),
+    }))
     stages.push({
       id: s.id,
       no: s.no ?? '',
@@ -66,6 +71,7 @@ export function parseRouteHtml(html: string): RouteContent {
       why: s.why ?? '',
       example: s.example ?? '',
       result: text(s.result ?? ''),
+      ...(s.learn ? { learn: s.learn } : {}),
       nar: s.nar ?? '',
       ...(s.branch ? { branch: s.branch } : {}),
       ...(s.optional ? { optional: true } : {}),

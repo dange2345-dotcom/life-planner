@@ -1,9 +1,9 @@
-import { Fragment } from 'preact'
+import { Fragment, type JSX } from 'preact'
 import { useState } from 'preact/hooks'
 import { useApp } from '../app-context'
 import { setRouteBranch, setRouteMark } from '../data/route'
 import { useRouteData } from '../data/use-route'
-import type { Route, RouteFork, RouteItem, RouteStage, StudyTimer } from '../db/types'
+import type { Route, RouteFork, RouteGroup, RouteItem, RouteStage, StudyTimer } from '../db/types'
 import { ROUTE_ID, onBranch, routeProgress, topicCount, type StageProgress } from '../domain/route'
 import { EmptyState, ProgressBar, Ring, ScreenHeader } from '../ui/components'
 import { IconCheck, IconChevronRight } from '../ui/icons'
@@ -190,6 +190,7 @@ function StageCard(props: {
             <Facet title="Зачем" text={stage.why} />
             <Facet title="Пример" text={stage.example} />
             <Facet title="Результат" text={stage.result} />
+            <Facet title="Где учить" text={stage.learn ?? ''} />
             <Facet title={props.route.trainer || 'Тренажёр'} text={stage.nar} tinted />
           </dl>
 
@@ -211,7 +212,7 @@ function StageCard(props: {
               <h3 class="route-subhead">Темы · {topics}</h3>
               <div class="route-groups">
                 {stage.groups.map((group) => (
-                  <TopicGroup key={group.title} title={group.title} note={group.note} items={group.items} done={done} onToggle={onToggle} />
+                  <TopicGroup key={group.title} group={group} done={done} onToggle={onToggle} />
                 ))}
               </div>
             </>
@@ -222,34 +223,80 @@ function StageCard(props: {
   )
 }
 
+/** Ссылки в тексте маршрута: [текст](https://…). */
+const LINK = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
+
+/** Текст со ссылками — для полей вне кнопок (внутри кнопки ссылка недопустима). */
+function RichText(props: { text: string }) {
+  const parts: (string | JSX.Element)[] = []
+  let last = 0
+  for (const m of props.text.matchAll(LINK)) {
+    parts.push(props.text.slice(last, m.index))
+    parts.push(
+      <a href={m[2]} target="_blank" rel="noopener noreferrer">
+        {m[1]}
+      </a>,
+    )
+    last = m.index + m[0].length
+  }
+  parts.push(props.text.slice(last))
+  return <>{parts}</>
+}
+
+/** Тот же текст без разметки ссылок. */
+const plain = (text: string) => text.replace(LINK, '$1')
+
 function Facet(props: { title: string; text: string; tinted?: boolean }) {
   if (!props.text) return null
   return (
     <div class={`route-facet${props.tinted ? ' route-facet--tinted' : ''}`}>
       <dt>{props.title}</dt>
-      <dd>{props.text}</dd>
+      <dd>
+        <RichText text={props.text} />
+      </dd>
     </div>
   )
 }
 
-function TopicGroup(props: { title: string; note?: string; items: RouteItem[]; done: ReadonlySet<string>; onToggle: (key: string) => void }) {
+function TopicGroup(props: { group: RouteGroup; done: ReadonlySet<string>; onToggle: (key: string) => void }) {
+  const { group } = props
   const [open, setOpen] = useState(false)
-  const n = props.items.filter((item) => props.done.has(item.k)).length
-  const full = n === props.items.length
+  const n = group.items.filter((item) => props.done.has(item.k)).length
+  const full = n === group.items.length
   return (
     <div class={`route-group${open ? ' route-group--open' : ''}`}>
       <button type="button" class="route-group__head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span class="route-group__title">{props.title}</span>
+        <span class="route-group__title">{group.title}</span>
         <span class={`route-group__count tabular${full ? ' route-group__count--full' : ''}`}>
-          {n}/{props.items.length}
+          {n}/{group.items.length}
         </span>
         <IconChevronRight size={18} class="route-chevron" />
       </button>
       {open && (
         <>
-          {props.note && <p class="hint route-group__note">{props.note}</p>}
+          {group.note && <p class="hint route-group__note">{group.note}</p>}
+          {(group.learn || group.practice) && (
+            <dl class="route-group__meta">
+              {group.learn && (
+                <div>
+                  <dt>Где учить</dt>
+                  <dd>
+                    <RichText text={group.learn} />
+                  </dd>
+                </div>
+              )}
+              {group.practice && (
+                <div>
+                  <dt>Тренажёр</dt>
+                  <dd>
+                    <RichText text={group.practice} />
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )}
           <ul class="route-checks route-checks--topics">
-            {props.items.map((item) => (
+            {group.items.map((item) => (
               <li key={item.k}>
                 <CheckRow item={item} done={props.done.has(item.k)} onToggle={props.onToggle} />
               </li>
@@ -274,7 +321,10 @@ function CheckRow(props: { item: RouteItem; done: boolean; onToggle: (key: strin
       <span class="route-check__box" aria-hidden="true">
         <IconCheck size={13} />
       </span>
-      <span class="route-check__text">{item.t}</span>
+      <span class="route-check__text">
+        {item.t}
+        {item.d && <span class="route-check__detail">{plain(item.d)}</span>}
+      </span>
     </button>
   )
 }

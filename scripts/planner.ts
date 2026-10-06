@@ -403,7 +403,7 @@ function printStage(stage: RouteStage, done: Set<string>) {
   }
   for (const group of stage.groups) {
     console.log(`${group.title} · ${group.items.filter((i) => done.has(i.k)).length}/${group.items.length}`)
-    for (const item of group.items) console.log(`  ${box(item.k)} ${item.t}  (${item.k})`)
+    for (const item of group.items) console.log(`  ${box(item.k)} ${item.t}  (${item.k})${item.d ? `\n        ${item.d}` : ''}`)
   }
 }
 

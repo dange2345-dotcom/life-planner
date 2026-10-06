@@ -217,6 +217,8 @@ export interface PushSub extends SyncMeta {
 export interface RouteItem {
   k: string
   t: string
+  /** Что именно знать по теме (у вех нет). Может содержать ссылки [текст](https://…). */
+  d?: string
 }
 
 /** Группа тем этапа (раскрывающийся список с отметками). */
@@ -224,6 +226,10 @@ export interface RouteGroup {
   title: string
   /** Пояснение под заголовком, например «не заучивать». */
   note?: string
+  /** Где учить эти темы. Может содержать ссылки [текст](https://…). */
+  learn?: string
+  /** Где тренироваться. Может содержать ссылки [текст](https://…). */
+  practice?: string
   items: RouteItem[]
 }
 
@@ -238,7 +244,9 @@ export interface RouteStage {
   why: string
   example: string
   result: string
-  /** Чем помогает тренажёр (сайт с задачами и вопросами). */
+  /** Главные источники этапа. Может содержать ссылки [текст](https://…). */
+  learn?: string
+  /** Чем помогает тренажёр (сайт с задачами и вопросами). Может содержать ссылки. */
   nar: string
   /** Этап ветки после развилки; без ветки — общий. */
   branch?: string
